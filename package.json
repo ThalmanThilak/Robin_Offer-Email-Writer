@@ -1,0 +1,16 @@
+{
+  "name": "offer-email-writer",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Offer Email Writer. Static site. These packages are only used to bundle the SDK file and to run tests.",
+  "type": "module",
+  "scripts": {
+    "build-sdk": "node tools/build-sdk.mjs",
+    "serve": "python3 -m http.server 8080 --directory site",
+    "test": "node tests/run-tests.cjs"
+  },
+  "devDependencies": {
+    "@anthropic-ai/sdk": "1.3.0",
+    "esbuild": "0.25.10"
+  }
+}

@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src https://api.anthropic.com; font-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; manifest-src 'self'">
+  <meta name="referrer" content="no-referrer">
+  <title>Offer Email Writer</title>
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/style.css">
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <h1 class="app-name">Offer Email Writer</h1>
+    <nav class="tabs" aria-label="Main">
+      <button type="button" class="tab is-active" data-view="write" data-i18n="nav_write">Write email</button>
+      <button type="button" class="tab" data-view="settings" data-i18n="nav_settings">Settings</button>
+    </nav>
+  </header>
+
+  <div id="key-banner" class="banner" hidden>
+    <span data-i18n="banner_no_key">No API key is saved yet. Add it in Settings.</span>
+    <button type="button" class="link-button" data-goto="settings" data-i18n="banner_open_settings">Open Settings</button>
+  </div>
+
+  <!-- WRITE VIEW -->
+  <main id="view-write" class="view layout">
+    <section class="column form-column" aria-labelledby="h-client">
+      <div class="card">
+        <h2 id="h-client" data-i18n="h_client">Client details</h2>
+        <p class="hint privacy-hint" data-i18n="hint_names">First and last name stay in this browser. They are never sent to Claude.</p>
+
+        <div class="row two">
+          <label class="field">
+            <span><span data-i18n="f_first_name">First name</span> <span class="req">*</span></span>
+            <input id="first-name" type="text" autocomplete="off" spellcheck="false">
+          </label>
+          <label class="field">
+            <span><span data-i18n="f_last_name">Last name</span> <span class="req">*</span></span>
+            <input id="last-name" type="text" autocomplete="off" spellcheck="false">
+          </label>
+        </div>
+
+        <div class="row two">
+          <label class="field">
+            <span data-i18n="f_gender">Gender</span>
+            <select id="gender">
+              <option value="male" data-i18n="gender_male">Male</option>
+              <option value="female" data-i18n="gender_female">Female</option>
+              <option value="other" data-i18n="gender_other" selected>Other or not given</option>
+            </select>
+          </label>
+          <label class="field">
+            <span><span data-i18n="f_age">Age</span> <span class="req">*</span></span>
+            <input id="age" type="number" min="16" max="110" inputmode="numeric">
+          </label>
+        </div>
+
+        <div class="row two">
+          <label class="field">
+            <span><span data-i18n="f_country">Home country</span> <span class="req">*</span></span>
+            <input id="country" type="text" list="country-list" autocomplete="off" data-i18n-placeholder="ph_country">
+            <datalist id="country-list"></datalist>
+          </label>
+          <label class="field">
+            <span><span data-i18n="f_region">Region or state</span> <span class="opt" data-i18n="optional">(optional)</span></span>
+            <input id="region" type="text" autocomplete="off">
+          </label>
+        </div>
+
+        <div class="row two">
+          <label class="field">
+            <span><span data-i18n="f_years">Years in Germany</span> <span class="opt" data-i18n="optional">(optional)</span></span>
+            <input id="years" type="number" min="0" max="80" step="0.5" inputmode="decimal">
+          </label>
+          <label class="field">
+            <span><span data-i18n="f_job">Job</span> <span class="opt" data-i18n="optional">(optional)</span></span>
+            <input id="job" type="text" autocomplete="off">
+          </label>
+        </div>
+
+        <div class="row two">
+          <label class="field">
+            <span><span data-i18n="f_family">Family status</span> <span class="opt" data-i18n="optional">(optional)</span></span>
+            <select id="family">
+              <option value="" data-i18n="family_none">Not given</option>
+              <option value="single" data-i18n="family_single">Single</option>
+              <option value="married" data-i18n="family_married">Married</option>
+              <option value="partner" data-i18n="family_partner">Partner</option>
+              <option value="divorced" data-i18n="family_divorced">Divorced</option>
+              <option value="widowed" data-i18n="family_widowed">Widowed</option>
+            </select>
+          </label>
+          <label class="field">
+            <span><span data-i18n="f_children">Number of children</span> <span class="opt" data-i18n="optional">(optional)</span></span>
+            <input id="children" type="number" min="0" max="20" inputmode="numeric">
+          </label>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 data-i18n="h_products">Products</h2>
+
+        <h3 data-i18n="h_offer">Products to offer</h3>
+        <div id="picker-offer" class="picker"></div>
+        <div id="email-facts" class="email-facts"></div>
+
+        <h3 data-i18n="h_has">Products the client already has</h3>
+        <div id="picker-has" class="picker"></div>
+      </div>
+
+      <div class="card">
+        <h2 data-i18n="h_options">Email options</h2>
+        <label class="field">
+          <span data-i18n="f_goal">Email goal</span>
+          <select id="goal">
+            <option value="first_contact" data-i18n="goal_first">First contact</option>
+            <option value="follow_up" data-i18n="goal_follow">Follow-up after a call</option>
+            <option value="offer" data-i18n="goal_offer">Offer after a meeting</option>
+          </select>
+        </label>
+
+        <div class="field">
+          <span data-i18n="f_email_lang">Email language</span>
+          <div class="segmented" id="email-lang" role="radiogroup">
+            <button type="button" role="radio" data-value="en" class="is-on" aria-checked="true">English</button>
+            <button type="button" role="radio" data-value="de" aria-checked="false">Deutsch</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <span data-i18n="f_length">Length</span>
+          <div class="segmented" id="length" role="radiogroup">
+            <button type="button" role="radio" data-value="short" aria-checked="false" data-i18n="len_short">Short</button>
+            <button type="button" role="radio" data-value="medium" class="is-on" aria-checked="true" data-i18n="len_medium">Medium</button>
+            <button type="button" role="radio" data-value="long" aria-checked="false" data-i18n="len_long">Long</button>
+          </div>
+        </div>
+
+        <p id="form-error" class="message error" role="alert" hidden></p>
+        <button type="button" id="generate" class="button primary big" data-i18n="btn_generate">Generate</button>
+        <ol id="progress" class="progress" aria-live="polite" hidden></ol>
+      </div>
+    </section>
+
+    <section class="column result-column" aria-labelledby="h-result">
+      <h2 id="h-result" class="sr-only" data-i18n="h_result">Result</h2>
+
+      <div id="result-empty" class="card empty-state">
+        <p data-i18n="result_empty">The email appears here after you click Generate.</p>
+      </div>
+
+      <div id="result" hidden>
+        <p id="result-error" class="message error" role="alert" hidden></p>
+
+        <div class="card">
+          <h3 data-i18n="h_subjects">Subject lines</h3>
+          <ul id="subjects" class="subjects"></ul>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <h3 data-i18n="h_email">Email</h3>
+            <span id="busy-edit" class="busy" hidden data-i18n="working">Working...</span>
+          </div>
+          <div id="email-preview" class="email-preview"></div>
+          <div class="edit-buttons">
+            <button type="button" class="button" data-edit="shorter" data-i18n="btn_shorter">Shorter</button>
+            <button type="button" class="button" data-edit="longer" data-i18n="btn_longer">Longer</button>
+            <button type="button" class="button" data-edit="warmer" data-i18n="btn_warmer">Warmer</button>
+            <button type="button" class="button" data-edit="formal" data-i18n="btn_formal">More formal</button>
+            <button type="button" class="button" id="regenerate" data-i18n="btn_again">Generate again</button>
+          </div>
+          <div class="copy-row">
+            <button type="button" id="copy-email" class="button primary big" data-i18n="btn_copy_email">Copy email</button>
+            <span class="copied" data-copied-for="copy-email" hidden data-i18n="copied">Copied</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3 data-i18n="h_whatsapp">WhatsApp message</h3>
+          <pre id="whatsapp" class="whatsapp"></pre>
+          <div class="copy-row">
+            <button type="button" id="copy-whatsapp" class="button primary" data-i18n="btn_copy_whatsapp">Copy WhatsApp</button>
+            <span class="copied" data-copied-for="copy-whatsapp" hidden data-i18n="copied">Copied</span>
+          </div>
+        </div>
+
+        <div class="card facts-card">
+          <h3 data-i18n="h_facts">Facts to check</h3>
+          <p class="hint" data-i18n="hint_facts">Check these before you send. This panel is never copied.</p>
+          <div id="warnings"></div>
+          <ul id="facts" class="facts"></ul>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- SETTINGS VIEW -->
+  <main id="view-settings" class="view settings" hidden>
+    <div class="card">
+      <h2 data-i18n="h_api">API key</h2>
+      <p class="hint" data-i18n="hint_api">The key is saved in this browser only. It is sent only to Anthropic.</p>
+      <div class="key-row">
+        <input id="api-key" type="password" autocomplete="off" spellcheck="false" placeholder="sk-ant-...">
+        <button type="button" id="key-toggle" class="button" data-i18n="btn_show">Show</button>
+      </div>
+      <div class="button-row">
+        <button type="button" id="key-save" class="button primary" data-i18n="btn_save">Save</button>
+        <button type="button" id="key-test" class="button" data-i18n="btn_test">Test connection</button>
+        <button type="button" id="key-delete" class="button danger" data-i18n="btn_delete">Delete</button>
+      </div>
+      <p id="key-message" class="message" role="status" hidden></p>
+    </div>
+
+    <div class="card">
+      <h2 data-i18n="h_ui_lang">Screen language</h2>
+      <div class="segmented" id="ui-lang" role="radiogroup">
+        <button type="button" role="radio" data-value="en" class="is-on" aria-checked="true">English</button>
+        <button type="button" role="radio" data-value="de" aria-checked="false">Deutsch</button>
+      </div>
+      <p class="hint" data-i18n="hint_ui_lang">This changes the screen only, not the email language.</p>
+    </div>
+
+    <div class="card">
+      <h2 data-i18n="h_signature">Signature</h2>
+      <p class="hint" data-i18n="hint_signature">Added to the end of every email exactly as you type it.</p>
+      <textarea id="signature" rows="8" spellcheck="false"></textarea>
+      <p class="saved-note" data-saved-for="signature" hidden data-i18n="saved">Saved</p>
+    </div>
+
+    <div class="card">
+      <h2 data-i18n="h_instructions">My instructions</h2>
+      <p class="hint" data-i18n="hint_instructions">How you want your emails written. Every email follows these, unless they break a fixed rule.</p>
+      <textarea id="instructions" rows="10"></textarea>
+      <p class="saved-note" data-saved-for="instructions" hidden data-i18n="saved">Saved</p>
+    </div>
+
+    <div class="card">
+      <h2 data-i18n="h_my_products">My products</h2>
+      <p class="hint" data-i18n="hint_my_products">Optional facts for each product. Prices and cover amounts in emails come only from here.</p>
+      <div id="my-products" class="my-products"></div>
+      <h3 data-i18n="h_add_own">Add my own product</h3>
+      <div class="row two">
+        <label class="field">
+          <span data-i18n="f_own_en">English name</span>
+          <input id="own-en" type="text" autocomplete="off">
+        </label>
+        <label class="field">
+          <span data-i18n="f_own_de">German name</span>
+          <input id="own-de" type="text" autocomplete="off">
+        </label>
+      </div>
+      <button type="button" id="own-add" class="button" data-i18n="btn_add_product">Add product</button>
+      <p id="own-message" class="message" role="status" hidden></p>
+    </div>
+
+    <div class="card">
+      <h2 data-i18n="h_backup">Backup</h2>
+      <p class="hint" data-i18n="hint_backup">The backup file has all settings except the API key.</p>
+      <div class="button-row">
+        <button type="button" id="export" class="button" data-i18n="btn_export">Export settings</button>
+        <label class="button file-button">
+          <span data-i18n="btn_import">Import settings</span>
+          <input id="import" type="file" accept="application/json,.json">
+        </label>
+      </div>
+      <p id="backup-message" class="message" role="status" hidden></p>
+    </div>
+  </main>
+</body>
+</html>
