@@ -14,6 +14,7 @@ function defaults() {
     instructions: "",
     productFacts: {},
     ownProducts: [],
+    removedProducts: [],
   };
 }
 
@@ -71,6 +72,9 @@ function clean(raw) {
       const de = typeof p.de === "string" ? p.de.trim() : "";
       if (en || de) out.ownProducts.push({ id: p.id, en: en || de, de: de || en });
     }
+  }
+  if (Array.isArray(raw.removedProducts)) {
+    out.removedProducts = [...new Set(raw.removedProducts.filter((id) => typeof id === "string" && id))];
   }
   return out;
 }

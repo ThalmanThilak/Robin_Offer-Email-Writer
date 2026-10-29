@@ -434,7 +434,7 @@ button:focus-visible {
 }
 
 summary .badge {
-  margin-left: 8px;
+  margin-left: 0;
 }
 
 .custom-row {
@@ -718,4 +718,43 @@ summary .badge {
   left: -9999px;
   top: 0;
   white-space: pre-wrap;
+}
+
+/* Facts panel groups and removed products */
+.fact-group {
+  margin: 14px 0 6px;
+  font-weight: 650;
+}
+
+.fact-about {
+  margin: 0 0 2px;
+  font-size: 0.8rem;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+}
+
+.fact-card > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.product-name {
+  flex: 1;
+}
+
+.summary-button {
+  margin-left: auto;
+}
+
+.fact-card.is-removed > summary .product-name {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.badge.is-removed {
+  background: #eceff3;
+  color: var(--muted);
 }

@@ -1,14 +1,26 @@
 // Offer Email Writer: connects the screen to the settings, the API calls and the checks.
-import { PRODUCT_GROUPS, LENGTH_WORDS } from "./config.js";
+import { PRODUCT_GROUPS, LENGTH_WORDS, CLOSINGS } from "./config.js";
 import { t, setLanguage, getLanguage, applyTranslations } from "./i18n.js";
 import { countryList, codeForName, englishCountryName } from "./countries.js";
 import * as store from "./storage.js";
 import { fillNames, scrubNames } from "./privacy.js";
-import { removeDashes, unsupportedNumbers, verifyFacts, looksInformalGerman, canonical } from "./checks.js";
+import {
+  removeDashes,
+  unsupportedNumbers,
+  looksInformalGerman,
+  canonical,
+  cleanText,
+  findRuleTalk,
+  findPromises,
+  signatureStartsWithClosing,
+  stripTrailingClosing,
+} from "./checks.js";
 import { markdownToHtml, markdownToPlain, signatureToHtml, plainText } from "./render.js";
 import { copyRich, copyPlain } from "./clipboard.js";
-import { generate, edit, testConnection, AppError } from "./api.js";
-import { buildCase } from "./prompt.js";
+import { research, write, edit, testConnection, AppError } from "./api.js";
+import { buildCase, buildResearchCase } from "./prompt.js";
+
+const DEFAULT_IDS = new Set(PRODUCT_GROUPS.flatMap((g) => g.products.map((p) => p.id)));
 
 const $ = (id) => document.getElementById(id);
 
@@ -152,11 +164,18 @@ function renderPicker(kind) {
   box.append(chips, customRow);
 }
 
+function isRemoved(id) {
+  return state.settings.removedProducts.includes(id);
+}
+
 function renderPickerList(kind, list) {
   const filter = state.filter[kind].trim().toLocaleLowerCase();
   list.replaceChildren();
   for (const g of groups()) {
-    const items = g.products.filter((p) => !filter || `${p.en} ${p.de}`.toLocaleLowerCase().includes(filter));
+    // Removed products are hidden from "Products to offer" only. A client may still have them.
+    const items = g.products.filter(
+      (p) => !(kind === "offer" && isRemoved(p.id)) && (!filter || `${p.en} ${p.de}`.toLocaleLowerCase().includes(filter))
+    );
     if (!items.length) continue;
     const head = document.createElement("div");
     head.className = "picker-group";
@@ -290,15 +309,9 @@ function numberOrEmpty(id) {
 }
 
 const URL_IN_TEXT = /\bhttps?:\/\/[^\s<>"']+[^\s<>"'.,;:!?)\]]|\bwww\.[^\s<>"']+[^\s<>"'.,;:!?)\]]/gi;
-const CLOSING = /^(kind regards|best regards|warm regards|regards|best wishes|best|sincerely|yours sincerely|yours faithfully|mit freundlichen gr|freundliche gr|viele gr|beste gr|herzliche gr|liebe gr|mfg|gru(ß|ss))/i;
 
-function signatureInfo() {
-  const sig = state.settings.signature || "";
-  const firstLine = sig.split(/\r?\n/).find((l) => l.trim()) || "";
-  return {
-    bookingLinks: [...new Set(sig.match(URL_IN_TEXT) || [])],
-    hasClosing: CLOSING.test(firstLine.trim()),
-  };
+function bookingLinks() {
+  return [...new Set((state.settings.signature || "").match(URL_IN_TEXT) || [])];
 }
 
 function lengthWords(level, productCount) {
@@ -328,7 +341,6 @@ function readForm() {
   errBox.hidden = true;
 
   const code = codeForName(countryText);
-  const sig = signatureInfo();
   const toProduct = (id) => {
     const p = findProduct(id);
     return p ? { en: p.en, de: p.de, facts: state.emailFacts[id] || {} } : null;
@@ -350,8 +362,7 @@ function readForm() {
       goal: $("goal").value,
       emailLanguage: state.emailLang,
       lengthWords: lengthWords(state.length, offer.length),
-      bookingLinks: sig.bookingLinks,
-      signatureHasClosing: sig.hasClosing,
+      bookingLinks: bookingLinks(),
       instructions: state.settings.instructions.trim(),
     },
   };
@@ -404,51 +415,128 @@ function errorText(err) {
     refused: "e_refused",
     json: "e_json",
     too_long: "e_too_long",
+    research_empty: "e_research",
   };
   return t(map[code] || "e_unknown");
 }
 
 // ---------- Result ----------
 
-// Runs the code checks on a reply: dashes out, facts checked, numbers checked.
-function checkResult(raw, sources, input) {
+const MIN_HOME_FACTS = 2;
+
+function agentFactsText(input) {
+  return input.offer.map((p) => Object.values(p.facts || {}).join(" ")).join("\n");
+}
+
+// Runs the code checks on a reply: markup out, dashes out, closing out, then content checks.
+function checkResult(raw, notes, input) {
   let dashesFixed = false;
-  const fix = (s) => {
-    const r = removeDashes(s);
+  const fix = (s, where) => {
+    const r = removeDashes(cleanText(s, where));
     if (r.changed) dashesFixed = true;
     return r.text;
   };
   const result = {
-    subject_lines: raw.subject_lines.map(fix),
-    email_body: fix(raw.email_body),
-    whatsapp_message: fix(plainText(raw.whatsapp_message)),
-    facts: raw.facts.map((f) => ({ ...f, claim: fix(f.claim), source_title: fix(f.source_title) })),
-    research_notes: raw.research_notes,
+    subject_lines: raw.subject_lines.map((s) => fix(s, "subject line")),
+    email_body: stripTrailingClosing(fix(raw.email_body, "email")),
+    whatsapp_message: fix(plainText(raw.whatsapp_message), "WhatsApp message"),
+    used_notes: raw.used_notes,
   };
-  result.facts = verifyFacts(result.facts, sources.keys());
+
+  const byId = new Map(notes.map((n) => [n.id, n]));
+  const used = result.used_notes.map((id) => byId.get(id)).filter(Boolean);
+  const factsPanel = used.length ? used : notes;
 
   const allowed = [
-    ...input.offer.map((p) => Object.values(p.facts || {}).join(" ")),
-    ...result.facts.map((f) => f.claim),
+    agentFactsText(input),
+    ...notes.filter((n) => n.sources.length).map((n) => n.fact),
     input.instructions,
     String(input.age),
     String(input.years),
     String(input.children),
   ];
   const checkedText = [result.email_body, result.whatsapp_message, ...result.subject_lines].join("\n");
-  const badNumbers = unsupportedNumbers(checkedText, allowed);
-  const informal = input.emailLanguage === "de" && looksInformalGerman(checkedText);
-  return { result, badNumbers, informal, dashesFixed };
+  const homeShort = input.offer
+    .map((p, i) => ({ p, key: `P${i + 1}` }))
+    .filter(({ key }) => used.filter((n) => n.product === key && n.about === "home").length < MIN_HOME_FACTS)
+    .map(({ p }) => productLabel(p));
+
+  return {
+    result,
+    factsPanel,
+    badNumbers: unsupportedNumbers(checkedText, allowed),
+    informal: input.emailLanguage === "de" && looksInformalGerman(checkedText),
+    ruleTalk: findRuleTalk(checkedText),
+    promises: findPromises(checkedText, agentFactsText(input)),
+    homeShort,
+    dashesFixed,
+  };
 }
 
 function filled(text) {
   return fillNames(text, state.last.names);
 }
 
+// Email body plus the closing line in the email's language. No closing if the signature starts with one.
+function composedBody() {
+  const body = filled(state.last.checked.result.email_body);
+  const signature = state.settings.signature || "";
+  if (signatureStartsWithClosing(signature)) return body;
+  return `${body}\n\n${CLOSINGS[state.last.names.lang] || CLOSINGS.en}`;
+}
+
+function renderFacts(notes) {
+  const facts = $("facts");
+  facts.replaceChildren();
+  if (!notes.length) {
+    const li = document.createElement("li");
+    li.className = "fact-empty";
+    li.textContent = t("facts_none");
+    facts.append(li);
+    return;
+  }
+  const input = state.last.input;
+  input.offer.forEach((p, i) => {
+    const key = `P${i + 1}`;
+    const mine = notes.filter((n) => n.product === key);
+    if (!mine.length) return;
+    const head = document.createElement("li");
+    head.className = "fact-group";
+    head.textContent = productLabel(p);
+    facts.append(head);
+    for (const n of mine) {
+      const li = document.createElement("li");
+      li.className = "fact " + (n.sources.length ? "is-verified" : "is-unverified");
+      const about = document.createElement("p");
+      about.className = "fact-about";
+      about.textContent = n.about === "product" ? t("about_product") : n.country;
+      const claim = document.createElement("p");
+      claim.className = "fact-claim";
+      claim.textContent = n.fact;
+      li.append(about, claim);
+      for (const s of n.sources) {
+        const a = document.createElement("a");
+        a.href = /^https?:\/\//i.test(s.url) ? s.url : "#";
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        a.textContent = s.title || s.url;
+        li.append(a);
+      }
+      if (!n.sources.length) {
+        const status = document.createElement("p");
+        status.className = "fact-status";
+        status.textContent = t("fact_no_source");
+        li.append(status);
+      }
+      facts.append(li);
+    }
+  });
+}
+
 function renderResult() {
   const last = state.last;
   if (!last) return;
-  const { result, badNumbers, informal, dashesFixed } = last.checked;
+  const { result, badNumbers, informal, ruleTalk, promises, homeShort, dashesFixed, factsPanel } = last.checked;
   $("result-empty").hidden = true;
   $("result").hidden = false;
 
@@ -475,8 +563,7 @@ function renderResult() {
 
   const bad = new Set(badNumbers.map(canonical));
   const marks = bad.size ? (n) => bad.has(canonical(n)) : null;
-  $("email-preview").innerHTML =
-    markdownToHtml(filled(result.email_body), marks) + signatureToHtml(state.settings.signature);
+  $("email-preview").innerHTML = markdownToHtml(composedBody(), marks) + signatureToHtml(state.settings.signature);
   $("whatsapp").textContent = filled(result.whatsapp_message);
 
   const warnings = $("warnings");
@@ -487,39 +574,14 @@ function renderResult() {
     p.textContent = text;
     warnings.append(p);
   };
+  if (homeShort.length) warn(t("warn_home_facts", { list: homeShort.join(", ") }));
+  if (promises.length) warn(t("warn_promises", { list: promises.map((p) => `"${p}"`).join(", ") }));
+  if (ruleTalk.length) warn(t("warn_rule_talk", { list: ruleTalk.map((p) => `"${p}"`).join(", ") }));
   if (badNumbers.length) warn(t("warn_numbers", { list: badNumbers.join(", ") }));
   if (informal) warn(t("warn_du"));
   if (dashesFixed) warn(t("warn_dashes"));
 
-  const facts = $("facts");
-  facts.replaceChildren();
-  if (!result.facts.length) {
-    const li = document.createElement("li");
-    li.className = "fact-empty";
-    li.textContent = t("facts_none");
-    facts.append(li);
-  }
-  for (const f of result.facts) {
-    const li = document.createElement("li");
-    li.className = "fact " + (f.verified ? "is-verified" : "is-unverified");
-    const claim = document.createElement("p");
-    claim.className = "fact-claim";
-    claim.textContent = f.claim;
-    li.append(claim);
-    if (f.source_url) {
-      const a = document.createElement("a");
-      a.href = /^https?:\/\//i.test(f.source_url) ? f.source_url : "#";
-      a.target = "_blank";
-      a.rel = "noopener noreferrer";
-      a.textContent = f.source_title || f.source_url;
-      li.append(a);
-    }
-    const status = document.createElement("p");
-    status.className = "fact-status";
-    status.textContent = f.source_url ? (f.verified ? t("fact_ok") : t("fact_unverified")) : t("fact_no_link");
-    li.append(status);
-    facts.append(li);
-  }
+  renderFacts(factsPanel);
 }
 
 function flash(note, ok) {
@@ -540,11 +602,21 @@ function showResultError(err) {
   box.hidden = false;
 }
 
+// Token use of the last action, and the notes behind it. Read by the live tests. Holds no names.
+function recordUsage(calls) {
+  window.__oewLastUsage = { calls };
+  const c = state.last?.checked;
+  window.__oewLastResult = c
+    ? { notes: state.last.notes, usedNotes: c.result.used_notes, homeShort: c.homeShort, ruleTalk: c.ruleTalk, promises: c.promises, badNumbers: c.badNumbers }
+    : null;
+}
+
 async function onGenerate() {
   if (state.busy) return;
   const form = readForm();
   if (!form) return;
   const apiKey = store.loadApiKey();
+  const researchCase = scrubDeep(buildResearchCase(form.input), form.names);
   const caseData = scrubDeep(buildCase(form.input), form.names);
 
   setBusy(true);
@@ -552,25 +624,25 @@ async function onGenerate() {
   progressStep(t("progress_research"));
   showResultError(null);
   try {
-    const out = await generate({
+    const found = await research({
       apiKey,
-      caseData,
+      researchCase,
+      homeCountry: form.input.country,
       onProgress: (p) => {
         if (p.type === "search") progressStep(t("progress_search", { q: p.query }));
-        if (p.type === "writing") progressStep(t("progress_writing"));
-        if (p.type === "fixing") progressStep(t("progress_fixing"));
       },
     });
+    progressStep(t("progress_writing"));
+    const written = await write({ apiKey, caseData, notes: found.notes });
     progressStep(t("progress_checking"));
     state.last = {
       names: form.names,
       input: form.input,
       caseData,
-      sources: out.sources,
-      checked: checkResult(out.result, out.sources, form.input),
-      usage: out.usage,
+      notes: found.notes,
+      checked: checkResult(written.result, found.notes, form.input),
     };
-    window.__oewLastUsage = out.usage;
+    recordUsage([...found.usage, ...written.usage]);
     renderResult();
     progressStep(t("progress_done"), true);
   } catch (err) {
@@ -585,23 +657,15 @@ async function onGenerate() {
 async function onEdit(kind) {
   if (state.busy || !state.last) return;
   const last = state.last;
-  const current = scrubDeep(
-    {
-      subject_lines: last.checked.result.subject_lines,
-      email_body: last.checked.result.email_body,
-      whatsapp_message: last.checked.result.whatsapp_message,
-      facts: last.checked.result.facts.map(({ claim, source_title, source_url }) => ({ claim, source_title, source_url })),
-      research_notes: last.checked.result.research_notes,
-    },
-    last.names
-  );
+  const r = last.checked.result;
+  const current = scrubDeep({ subject_lines: r.subject_lines, email_body: r.email_body, whatsapp_message: r.whatsapp_message }, last.names);
   setBusy(true);
   $("busy-edit").hidden = false;
   showResultError(null);
   try {
-    const out = await edit({ apiKey: store.loadApiKey(), caseData: last.caseData, current, kind });
-    last.checked = checkResult(out.result, last.sources, last.input);
-    window.__oewLastUsage = out.usage;
+    const out = await edit({ apiKey: store.loadApiKey(), caseData: last.caseData, notes: last.notes, current, kind });
+    last.checked = checkResult(out.result, last.notes, last.input);
+    recordUsage(out.usage);
     renderResult();
   } catch (err) {
     showResultError(err);
@@ -613,7 +677,7 @@ async function onEdit(kind) {
 
 async function onCopyEmail() {
   if (!state.last) return;
-  const body = filled(state.last.checked.result.email_body);
+  const body = composedBody();
   const sig = (state.settings.signature || "").replace(/\r\n?/g, "\n").trim();
   const html = markdownToHtml(body) + signatureToHtml(sig);
   const text = markdownToPlain(body) + (sig ? "\n\n" + sig : "");
@@ -659,8 +723,60 @@ function updateKeyBanner() {
   $("key-banner").hidden = Boolean(store.loadApiKey());
 }
 
+// Fills a product's summary line in Settings: name, badges and the Remove or Bring back button.
+function fillSummary(summary, p) {
+  summary.replaceChildren();
+  const name = document.createElement("span");
+  name.className = "product-name";
+  name.textContent = productLabel(p);
+  summary.append(name);
+  if (state.settings.productFacts[p.id]) {
+    const badge = document.createElement("span");
+    badge.className = "badge";
+    badge.textContent = t("has_facts");
+    summary.append(badge);
+  }
+  const removed = isRemoved(p.id);
+  if (removed) {
+    const badge = document.createElement("span");
+    badge.className = "badge is-removed";
+    badge.textContent = t("removed_badge");
+    summary.append(badge);
+  }
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "button small summary-button";
+  btn.textContent = removed ? t("btn_bring_back") : t("btn_remove_product");
+  btn.dataset.removeFor = p.id;
+  btn.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setRemoved(p.id, !removed);
+  });
+  summary.append(btn);
+}
+
+function setRemoved(id, removed) {
+  const list = state.settings.removedProducts.filter((x) => x !== id);
+  if (removed) {
+    list.push(id);
+    setSelected("offer", id, false);
+  }
+  state.settings.removedProducts = list;
+  saveSettings();
+  renderAllProducts();
+}
+
+function restoreDefaults() {
+  state.settings.removedProducts = state.settings.removedProducts.filter((id) => !DEFAULT_IDS.has(id));
+  saveSettings();
+  renderAllProducts();
+  showMessage("restore-message", t("restored"));
+}
+
 function renderMyProducts() {
   const box = $("my-products");
+  const open = new Set([...box.querySelectorAll("details[open]")].map((d) => d.dataset.product));
   box.replaceChildren();
   for (const g of groups()) {
     const head = document.createElement("h3");
@@ -669,16 +785,11 @@ function renderMyProducts() {
     box.append(head);
     for (const p of g.products) {
       const details = document.createElement("details");
-      details.className = "fact-card";
+      details.className = "fact-card" + (isRemoved(p.id) ? " is-removed" : "");
       details.dataset.product = p.id;
+      details.open = open.has(p.id);
       const summary = document.createElement("summary");
-      summary.textContent = productLabel(p);
-      if (state.settings.productFacts[p.id]) {
-        const badge = document.createElement("span");
-        badge.className = "badge";
-        badge.textContent = t("has_facts");
-        summary.append(" ", badge);
-      }
+      fillSummary(summary, p);
       details.append(summary);
       const values = state.settings.productFacts[p.id] || {};
       details.append(
@@ -698,6 +809,7 @@ function renderMyProducts() {
         del.addEventListener("click", () => {
           if (!confirm(t("confirm_delete_product"))) return;
           state.settings.ownProducts = state.settings.ownProducts.filter((x) => x.id !== p.id);
+          state.settings.removedProducts = state.settings.removedProducts.filter((x) => x !== p.id);
           delete state.settings.productFacts[p.id];
           setSelected("offer", p.id, false);
           setSelected("has", p.id, false);
@@ -716,16 +828,8 @@ const saveProductsSoon = debounce(() => {
   // Refresh the "facts saved" badges without closing the open card.
   for (const kind of ["offer", "has"]) renderPickerList(kind, $(`picker-${kind}`).querySelector(".picker-list"));
   for (const summary of $("my-products").querySelectorAll("details > summary")) {
-    const id = summary.parentElement.dataset.product;
-    const p = findProduct(id);
-    if (!p) continue;
-    summary.textContent = productLabel(p);
-    if (state.settings.productFacts[id]) {
-      const badge = document.createElement("span");
-      badge.className = "badge";
-      badge.textContent = t("has_facts");
-      summary.append(" ", badge);
-    }
+    const p = findProduct(summary.parentElement.dataset.product);
+    if (p) fillSummary(summary, p);
   }
 }, 400);
 
@@ -873,6 +977,7 @@ function init() {
   $("instructions").addEventListener("input", saveInstructions);
 
   $("own-add").addEventListener("click", addOwnProduct);
+  $("restore-defaults").addEventListener("click", restoreDefaults);
   $("export").addEventListener("click", exportSettings);
   $("import").addEventListener("change", async (e) => {
     const file = e.target.files?.[0];

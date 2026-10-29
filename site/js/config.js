@@ -1,24 +1,35 @@
 // Offer Email Writer: settings you can change.
 // After a change, save the file. Netlify puts the new version live in about one minute.
 
-// The Claude model. Robin never chooses it.
-export const MODEL = "claude-sonnet-5-5";
+// The Claude models. Robin never chooses them.
+// Step 1 researches the home country and Germany with web search.
+// Step 2 writes the email from the research notes, without web search.
+export const MODEL_RESEARCH = "claude-sonnet-5-5";
+export const MODEL_WRITE = "claude-sonnet-5-5";
 
 // How hard the model thinks: "low", "medium" or "high".
 // Higher is slower and costs more.
-export const EFFORT_GENERATE = "medium";
+export const EFFORT_RESEARCH = "medium";
+export const EFFORT_WRITE = "medium";
 export const EFFORT_EDIT = "low";
 
-// Most web searches for one email. Each search costs about 1 US cent.
-export const MAX_SEARCHES = 5;
+// Most web searches for one email. Each search costs 1 US cent.
+export const MAX_SEARCHES = 10;
 
 // Target length of the email in words, for one product.
 // Each extra product adds the "extra" number of words.
 // Robin never sees these numbers.
 export const LENGTH_WORDS = {
-  short: { base: 150, extraPerProduct: 75 },
-  medium: { base: 300, extraPerProduct: 150 },
-  long: { base: 450, extraPerProduct: 200 },
+  short: { base: 200, extraPerProduct: 120 },
+  medium: { base: 350, extraPerProduct: 200 },
+  long: { base: 500, extraPerProduct: 250 },
+};
+
+// The closing line the tool adds before the signature, by email language.
+// It is left out when the signature already starts with a closing line.
+export const CLOSINGS = {
+  en: "Kind regards,",
+  de: "Mit freundlichen Grüßen",
 };
 
 // The product list. "en" is the English name, "de" is the German name.

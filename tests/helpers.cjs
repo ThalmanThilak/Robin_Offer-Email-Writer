@@ -6,11 +6,11 @@ const path = require("path");
 const SITE = path.join(__dirname, "..", "site");
 const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".txt": "text/plain" };
 
-function startServer(port = 8181) {
+function startServer(port = 8181, siteDir = SITE) {
   const server = http.createServer((req, res) => {
     const urlPath = decodeURIComponent(new URL(req.url, "http://x").pathname);
-    const file = path.join(SITE, urlPath === "/" ? "index.html" : urlPath);
-    if (!file.startsWith(SITE) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
+    const file = path.join(siteDir, urlPath === "/" ? "index.html" : urlPath);
+    if (!file.startsWith(siteDir) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
       res.writeHead(404);
       return res.end("not found");
     }
@@ -71,6 +71,58 @@ function streamReply({ query, results, json, stopReason = "end_turn" }) {
   return sse(events);
 }
 
+// A streamed research reply: one web search, then fact lines. A line with "source" gets
+// citation data, the way the real API attaches it.
+function researchStream({ query = "q", results = [], lines = [] }) {
+  const events = [
+    {
+      type: "message_start",
+      message: { id: "msg_research", type: "message", role: "assistant", model: "claude-sonnet-5-5", content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: 5000, output_tokens: 1 } },
+    },
+    { type: "content_block_start", index: 0, content_block: { type: "server_tool_use", id: "srvtoolu_1", name: "web_search", input: {} } },
+    { type: "content_block_delta", index: 0, delta: { type: "input_json_delta", partial_json: JSON.stringify({ query }) } },
+    { type: "content_block_stop", index: 0 },
+    {
+      type: "content_block_start",
+      index: 1,
+      content_block: {
+        type: "web_search_tool_result",
+        tool_use_id: "srvtoolu_1",
+        content: results.map((r) => ({ type: "web_search_result", url: r.url, title: r.title, encrypted_content: "enc", page_age: null })),
+      },
+    },
+    { type: "content_block_stop", index: 1 },
+  ];
+  let index = 2;
+  const textBlock = (text, citation) => {
+    events.push({ type: "content_block_start", index, content_block: { type: "text", text: "", ...(citation ? { citations: [] } : {}) } });
+    if (citation) {
+      events.push({
+        type: "content_block_delta",
+        index,
+        delta: { type: "citations_delta", citation: { type: "web_search_result_location", url: citation.url, title: citation.title, cited_text: text.slice(0, 50), encrypted_index: "x" } },
+      });
+    }
+    events.push({ type: "content_block_delta", index, delta: { type: "text_delta", text } });
+    events.push({ type: "content_block_stop", index });
+    index++;
+  };
+  for (const line of lines) {
+    if (line.source) {
+      textBlock(line.tag + " ");
+      textBlock(line.text, line.source);
+      textBlock("\n");
+    } else {
+      textBlock(`${line.tag} ${line.text}\n`);
+    }
+  }
+  events.push(
+    { type: "message_delta", delta: { stop_reason: "end_turn", stop_sequence: null }, usage: { output_tokens: 700, server_tool_use: { web_search_requests: 1 } } },
+    { type: "message_stop" }
+  );
+  return sse(events);
+}
+
 function jsonReply(json) {
   return {
     id: "msg_edit",
@@ -110,4 +162,4 @@ async function fakeApi(page, handler) {
   return bodies;
 }
 
-module.exports = { startServer, fakeApi, streamReply, jsonReply, apiError };
+module.exports = { startServer, fakeApi, streamReply, researchStream, jsonReply, apiError };

@@ -239,7 +239,12 @@
 
     <div class="card">
       <h2 data-i18n="h_my_products">My products</h2>
-      <p class="hint" data-i18n="hint_my_products">Optional facts for each product. Prices and cover amounts in emails come only from here.</p>
+      <p class="hint" data-i18n="hint_my_products">Optional facts for each product. Prices, cover amounts and benefits in emails come only from here.</p>
+      <p class="hint" data-i18n="hint_remove">Remove hides a product from "Products to offer". It stays in "Products the client already has".</p>
+      <div class="button-row">
+        <button type="button" id="restore-defaults" class="button" data-i18n="btn_restore_defaults">Restore default products</button>
+      </div>
+      <p id="restore-message" class="message" role="status" hidden></p>
       <div id="my-products" class="my-products"></div>
       <h3 data-i18n="h_add_own">Add my own product</h3>
       <div class="row two">

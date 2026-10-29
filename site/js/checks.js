@@ -61,27 +61,90 @@ export function unsupportedNumbers(emailText, allowedTexts) {
   return bad;
 }
 
-export function normalizeUrl(url) {
-  try {
-    const u = new URL(url.trim());
-    u.hash = "";
-    let s = u.protocol + "//" + u.host.toLowerCase().replace(/^www\./, "") + u.pathname.replace(/\/+$/, "") + u.search;
-    try {
-      s = decodeURI(s);
-    } catch {}
-    return s;
-  } catch {
-    return (url || "").trim();
+// ---------- Clean-up of model text ----------
+
+// Markup that must never reach the email: citation tags, other tags, index codes, note ids.
+const CLEANUPS = [
+  [/&lt;\/?cite\b.*?&gt;/gi, "encoded cite tag"],
+  [/<\/?cite\b[^>]*>/gi, "cite tag"],
+  [/<\/?[a-z][a-z0-9-]*(?:\s[^<>]*)?\/?>/gi, "HTML tag"],
+  [/<\/?[a-z][a-z0-9-]*\b[^<>\n]*(?=\n|$)/gi, "broken tag"],
+  [/\s*\bindex\s*=\s*(?:"[^"\n]*"?|'[^'\n]*'?|[\d][\d,.:\s-]*)/gi, "index code"],
+  [/\u3010[^\u3011\n]*\u3011/g, "citation bracket"],
+  [/\s?\[\s*\d+(?:\s*[-,]\s*\d+)*\s*\]/g, "number reference"],
+  [/\s?\[\s*P\d+\s*\|\s*\w+\s*\]/gi, "research tag"],
+  [/\s?\[\s*NO[\s_-]*SOURCE\s*\]/gi, "no-source tag"],
+  [/\s?[\[(]\s*N\d+(?:\s*,\s*N\d+)*\s*[\])]/g, "note id"],
+];
+
+// Removes markup from model text before it is shown or copied.
+// Logs a console warning when something was removed, so we can see if the prompt still fails.
+export function cleanText(text, where = "text") {
+  if (!text) return text || "";
+  let out = text;
+  const removed = [];
+  for (const [re, label] of CLEANUPS) {
+    out = out.replace(re, (m) => {
+      removed.push(`${label}: ${m.trim()}`);
+      return "";
+    });
   }
+  if (!removed.length) return text;
+  out = out.replace(/[ \t]{2,}/g, " ").replace(/[ \t]+([.,;:!?])/g, "$1").replace(/[ \t]+$/gm, "");
+  console.warn(`Offer Email Writer: removed markup from ${where}`, removed);
+  return out;
 }
 
-// Marks each fact as verified when its link came back from the web search.
-export function verifyFacts(facts, sourceUrls) {
-  const known = new Set([...sourceUrls].map(normalizeUrl));
-  return facts.map((f) => ({
-    ...f,
-    verified: Boolean(f.source_url) && known.has(normalizeUrl(f.source_url)),
-  }));
+// ---------- Content checks ----------
+
+// Sentences where the model talks about its own rules or research instead of giving facts.
+const RULE_TALK = [
+  /\bwill not guess\b/i, /\bwon'?t guess\b/i, /\bnot (?:going to )?guess\b/i, /\bcannot verify\b/i, /\bcan'?t verify\b/i,
+  /\bcould not find\b/i, /\bcouldn'?t find\b/i, /\bno (?:reliable )?sources?\b/i, /\bmy research\b/i, /\bsearch results?\b/i,
+  /\byou know (?:this )?better than I\b/i, /\bI do not have (?:reliable|exact) (?:data|information)\b/i,
+  /\bnicht raten\b/i, /\bkeine (?:verl\u00e4sslichen? )?Quellen?\b/i, /\bkonnte (?:ich )?(?:keine|nicht) \w* ?finden\b/i, /\bmeine(?:r)? Recherche\b/i, /\bSuchergebnis/i,
+];
+
+export function findRuleTalk(text) {
+  const hits = [];
+  for (const re of RULE_TALK) {
+    const m = re.exec(text || "");
+    if (m) hits.push(m[0]);
+  }
+  return hits;
+}
+
+// Wording that promises more than a product description should. Allowed only if Robin wrote it in his facts.
+const PROMISES = [
+  "any kind of", "no questions asked", "always covered", "fully covered", "everything is covered", "covers everything",
+  "all damage", "any damage", "guarantee", "guaranteed", "100%", "100 %", "whatever happens", "completely covered", "without any limit",
+  "jede art", "ohne fragen", "garantiert", "immer abgedeckt", "alles abgedeckt", "vollst\u00e4ndig abgedeckt", "jeden schaden", "egal was passiert",
+];
+
+export function findPromises(text, agentFactsText) {
+  const lower = (text || "").toLowerCase();
+  const facts = (agentFactsText || "").toLowerCase();
+  return PROMISES.filter((p) => lower.includes(p) && !facts.includes(p));
+}
+
+// ---------- Closing line ----------
+
+const CLOSING_LINE = /^(kind regards|best regards|warm regards|regards|best wishes|all the best|best|sincerely|yours sincerely|yours faithfully|yours truly|thanks|thank you|many thanks|cheers|mit freundlichen gr\u00fc(?:\u00df|ss)en|freundliche gr\u00fc(?:\u00df|ss)e|viele gr\u00fc(?:\u00df|ss)e|beste gr\u00fc(?:\u00df|ss)e|herzliche gr\u00fc(?:\u00df|ss)e|liebe gr\u00fc(?:\u00df|ss)e|sch\u00f6ne gr\u00fc(?:\u00df|ss)e|gru(?:\u00df|ss)|danke|vielen dank|mfg|lg|vg)\b[\s,.!]*$/i;
+
+export function isClosingLine(line) {
+  return CLOSING_LINE.test((line || "").trim());
+}
+
+export function signatureStartsWithClosing(signature) {
+  const first = (signature || "").split(/\r?\n/).find((l) => l.trim());
+  return Boolean(first) && isClosingLine(first);
+}
+
+// Removes closing lines the model may have written at the end of the email body.
+export function stripTrailingClosing(body) {
+  const lines = (body || "").replace(/\s+$/, "").split("\n");
+  while (lines.length && (isClosingLine(lines[lines.length - 1]) || !lines[lines.length - 1].trim())) lines.pop();
+  return lines.join("\n");
 }
 
 // Light check for informal German ("du" form).
