@@ -25,9 +25,24 @@ In `site/js/config.js`, find `LENGTH_WORDS`:
 Robin never sees these numbers.
 
 ## Change the model
-In `site/js/config.js`, change this line:
-`export const MODEL = "claude-sonnet-5-5";`
+Each email uses two steps:
+1. Research: web search on the home country and Germany. Model: `MODEL_RESEARCH`.
+2. Writing: the email from the research notes, without web search. Model: `MODEL_WRITE`.
+The edit buttons (Shorter, Longer, Warmer, More formal) use `MODEL_WRITE` and never search again.
+
+In `site/js/config.js`, change these lines:
+`export const MODEL_RESEARCH = "claude-sonnet-5-5";`
+`export const MODEL_WRITE = "claude-sonnet-5-5";`
 Use an exact model name from the Anthropic models page: https://platform.claude.com/docs/en/about-claude/models/overview
+
+## Change the number of web searches
+In `site/js/config.js`, change `MAX_SEARCHES`. Each search costs 1 US cent.
+
+## Change the closing line
+In `site/js/config.js`, change `CLOSINGS`. The tool leaves the closing out when Robin's signature already starts with one.
+
+## Remove products (Robin can do this himself)
+In Settings, under My products, each product has a "Remove" button. A removed product no longer shows in "Products to offer". It still shows in "Products the client already has". "Restore default products" brings back the default list and keeps Robin's own products and saved facts.
 
 ## Redeploy
 Netlify watches the `main` branch on GitHub. Every saved change on `main` goes live by itself in about one minute.

@@ -2,7 +2,8 @@
 // Sources come from the citation data the API attaches to the text, never from text the model typed.
 import { cleanText } from "./checks.js";
 
-const LINE_RE = /^\s*(?:[-*]\s*)?\[\s*(P\d+)\s*\|\s*(HOME|GERMANY|PRODUCT)\s*\]\s*(.+?)\s*$/i;
+// Accepts "[P1|HOME] fact", also with a bullet or bold marks around the tag.
+const LINE_RE = /^\s*(?:[-*\u2022]\s*)*(?:\*\*)?\[\s*(P\d+)\s*\|\s*(HOME|GERMANY|PRODUCT)\s*\](?:\*\*)?[:\s]*(.+?)\s*$/i;
 const NO_SOURCE_RE = /\s*\[\s*NO[\s_-]*SOURCE\s*\]\s*/gi;
 
 // blocks: the content blocks of the research reply (text blocks may carry "citations").
@@ -34,7 +35,8 @@ export function parseResearch(blocks, homeCountry) {
       }
     }
     const about = m[2].toLowerCase();
-    const fact = cleanText(m[3].replace(NO_SOURCE_RE, " ")).trim();
+    // Links the model typed are not sources and must not reach the email.
+    const fact = cleanText(m[3].replace(NO_SOURCE_RE, " ").replace(/\s*\(?https?:\/\/[^\s)]+\)?/g, ""), "research note").trim();
     if (!fact) continue;
     notes.push({
       id: `N${notes.length + 1}`,

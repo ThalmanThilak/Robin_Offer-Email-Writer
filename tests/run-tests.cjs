@@ -199,6 +199,24 @@ async function waitEdit(page) {
     assert((await page.textContent("#progress li:last-child")).includes("research found nothing useful"), "no clear message");
   });
 
+  await test("Research reader: tags with bullets or bold, sources only from citation data", async () => {
+    const page = await newPage(browser);
+    const notes = await page.evaluate(async () => {
+      const { parseResearch } = await import("./js/research.js");
+      const blocks = [
+        { type: "text", text: "Some intro text without a tag.\n- **[P1|HOME]** " },
+        { type: "text", text: "Landlords ask for 10 months of rent.", citations: [{ type: "web_search_result_location", url: "https://example.org/a", title: "Source A" }] },
+        { type: "text", text: "\n[p1|germany]: The deposit is at most 3 months of rent. https://typed-by-model.example.com\n[P2|HOME] People often settle things privately. [NO SOURCE]\n" },
+      ];
+      return parseResearch(blocks, "India");
+    });
+    assert(notes.length === 3, "expected 3 notes, got " + JSON.stringify(notes));
+    assert(notes[0].about === "home" && notes[0].country === "India" && notes[0].sources[0].url === "https://example.org/a", "first note wrong: " + JSON.stringify(notes[0]));
+    assert(notes[1].about === "germany" && notes[1].sources.length === 0, "a link typed by the model became a source");
+    assert(!notes[1].fact.includes("http"), "typed link left in the fact text: " + notes[1].fact);
+    assert(notes[2].product === "P2" && !notes[2].fact.includes("NO SOURCE"), "no-source tag not removed");
+  });
+
   // ---------- Problem 3: markup ----------
 
   await test("Clean-up step removes fake cite tags, index codes and broken tags (unit test)", async () => {
