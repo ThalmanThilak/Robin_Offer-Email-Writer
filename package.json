@@ -7,7 +7,8 @@
   "scripts": {
     "build-sdk": "node tools/build-sdk.mjs",
     "serve": "python3 -m http.server 8080 --directory site",
-    "test": "node tests/run-tests.cjs"
+    "test": "node tests/run-tests.cjs",
+    "test:live": "node tests/live-tests.cjs"
   },
   "devDependencies": {
     "@anthropic-ai/sdk": "1.3.0",
