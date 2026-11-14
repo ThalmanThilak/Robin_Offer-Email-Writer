@@ -127,11 +127,11 @@ export function findPromises(text, agentFactsText) {
   return PROMISES.filter((p) => lower.includes(p) && !facts.includes(p));
 }
 
-// Invented urgency. The email may be urgent, but only with real reasons.
+// Direct pressure wording. The email must let the client feel the need on their own, never state it.
 const FAKE_URGENCY = [
   "limited offer", "limited time", "only today", "only this week", "last chance", "act now", "before it is too late", "before it's too late",
-  "offer ends", "offer expires", "don't miss", "do not miss", "hurry",
-  "nur heute", "nur diese woche", "nur noch", "letzte chance", "bevor es zu sp\u00e4t ist", "angebot endet", "befristetes angebot", "jetzt zuschlagen", "beeilen sie sich",
+  "offer ends", "offer expires", "don't miss", "do not miss", "hurry", "urgent", "don't wait", "do not wait", "as soon as possible", "right away", "without delay",
+  "nur heute", "nur diese woche", "nur noch", "letzte chance", "bevor es zu sp\u00e4t ist", "angebot endet", "befristetes angebot", "jetzt zuschlagen", "beeilen sie sich", "dringend", "warten sie nicht", "so schnell wie m\u00f6glich", "unverz\u00fcglich", "h\u00f6chste zeit",
 ];
 
 export function findFakeUrgency(text, agentFactsText) {

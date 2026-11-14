@@ -40,8 +40,11 @@ Use an exact model name from the Anthropic models page: https://platform.claude.
 - `site/js/checks.js` has checks in code. They run on every email after it is written: long dashes, numbers without a source, promises, invented pressure wording, the "du" form.
 - Settings, My instructions holds Robin's own wishes. Every email follows them, unless they break a fixed rule.
 
-## Tone: strong and urgent, but true
-Every email shows what is at stake for the client, says why to act now, and asks for a 15 minute call. The urgency must come from real facts. The tool warns Robin if an email uses wording such as "limited offer" or "last chance".
+## Tone: the client feels the need on their own
+Every email tells a story close to the client's life and shows the difference between the home country and Germany. It never says "urgent", "now" or "you must". It ends with a plain offer of a short call. The tool warns Robin if an email uses direct pressure wording such as "urgent" or "last chance".
+
+## No prices and no numbers
+Emails never show prices, cover amounts or any other numbers, also when they are known. Robin adds them by hand after he copies the email. The tool marks every number that still appears and shows a warning. For this reason My products has no price field.
 
 ## Insurance comparison
 The research also looks for the same kind of insurance in the client's home country: its local name, if the law requires it, how common it is. The email shows this in a short block with two bullet points, one for the home country and one for Germany. In "Facts to check" these facts have the label "This insurance in (country)".

@@ -212,7 +212,6 @@ function renderPickerList(kind, list) {
 const FACT_FIELDS = [
   ["allianzName", "pf_allianz_name", "input"],
   ["covers", "pf_covers", "textarea"],
-  ["price", "pf_price", "input"],
   ["benefit", "pf_benefit", "textarea"],
   ["notes", "pf_notes", "textarea"],
 ];
@@ -449,15 +448,6 @@ function checkResult(raw, notes, input) {
   const used = result.used_notes.map((id) => byId.get(id)).filter(Boolean);
   const factsPanel = used.length ? used : notes;
 
-  const allowed = [
-    agentFactsText(input),
-    ...notes.filter((n) => n.sources.length).map((n) => n.fact),
-    input.instructions,
-    input.clientNotes,
-    String(input.age),
-    String(input.years),
-    String(input.children),
-  ];
   const checkedText = [result.email_body, result.whatsapp_message, ...result.subject_lines].join("\n");
   const products = input.offer.map((p, i) => ({ p, key: `P${i + 1}` }));
   const homeShort = products
@@ -469,7 +459,8 @@ function checkResult(raw, notes, input) {
   return {
     result,
     factsPanel,
-    badNumbers: unsupportedNumbers(checkedText, allowed),
+    // Emails carry no prices and no numbers. Robin adds them by hand. Every number is marked.
+    badNumbers: unsupportedNumbers(checkedText, []),
     informal: input.emailLanguage === "de" && looksInformalGerman(checkedText),
     ruleTalk: findRuleTalk(checkedText),
     promises: findPromises(checkedText, agentFactsText(input)),

@@ -309,14 +309,14 @@ async function waitEdit(page) {
     assert(warn.includes("talks about its own research or rules") && warn.includes("will not guess"), "rule-talk warning missing: " + warn);
   });
 
-  await test("Urgency: the prompt asks for strong, true urgency; invented pressure wording gets a warning", async () => {
-    const body = writeResult().email_body + "\n\nThis is a limited offer, so act now.";
+  await test("Urgency: the prompt asks for indirect urgency only; direct pressure wording gets a warning", async () => {
+    const body = writeResult().email_body + "\n\nThis is urgent, so act now.";
     const { page, bodies } = await generateWith(browser, { api: defaultApi({ write: writeResult({ email_body: body }) }) });
     const system = JSON.parse(bodies[1].raw).system[0].text;
-    assert(system.includes("strong and urgent") && system.includes("Why now") && system.includes("Never invent urgency"), "urgency rules missing in the writing prompt");
-    assert(!system.includes("Never be pushy") && !system.includes("Calm and attractive"), "old calm rules still in the prompt");
+    assert(system.includes("Never state urgency or importance in direct words") && system.includes("let the client draw the conclusion"), "urgency rules missing in the writing prompt");
+    assert(!system.includes("Why now") && !system.includes("strong and urgent"), "old calm rules still in the prompt");
     const warn = await page.textContent("#warnings");
-    assert(warn.includes("pressure wording") && warn.includes('"limited offer"') && warn.includes('"act now"'), "no warning for invented urgency: " + warn);
+    assert(warn.includes("pressure wording") && warn.includes('"urgent"') && warn.includes('"act now"'), "no warning for invented urgency: " + warn);
     const clean = await generateWith(browser);
     assert(!(await clean.page.textContent("#warnings")).includes("pressure wording"), "urgency warning shown without cause");
   });
@@ -335,17 +335,22 @@ async function waitEdit(page) {
     const { bodies } = await generateWith(browser, { settings: { productFacts: { personal_liability: { price: "4,95 EUR per month", covers: "Cover up to 50 million euros" } } } });
     const research = JSON.parse(bodies[0].raw).messages[0].content;
     const msg = JSON.parse(bodies[1].raw).messages[0].content;
-    assert(msg.includes('"price": "4,95 EUR per month"') && msg.includes('"agent_facts": "none"'), "agent facts not sent correctly");
+    assert(msg.includes('"what_it_covers": "Cover up to 50 million euros"') && msg.includes('"agent_facts": "none"'), "agent facts not sent correctly");
+    assert(!msg.includes("4,95"), "the price was sent to the writer");
     assert(research.includes('"has_agent_facts": true') && research.includes('"has_agent_facts": false'), "research does not know which product has facts");
     assert(!research.includes("4,95"), "prices were sent to the research step");
   });
 
-  await test("Numbers without a source are marked; numbers from notes and My products are not", async () => {
+  await test("No prices or numbers: the prompt forbids them and every number in an email is marked", async () => {
     const write = writeResult({ email_body: writeResult().email_body + "\n\nMost claims cost around 1,500 euros. It costs 4,95 EUR per month." });
-    const { page } = await generateWith(browser, { api: defaultApi({ write }), settings: { productFacts: { personal_liability: { price: "4,95 EUR per month" } } } });
+    const { page, bodies } = await generateWith(browser, { api: defaultApi({ write }), settings: { productFacts: { personal_liability: { covers: "Damage to other people" } } } });
+    const system = JSON.parse(bodies[1].raw).system[0].text;
+    assert(system.includes("No prices and no numbers anywhere"), "no-numbers rule missing in the writing prompt");
+    assert(await page.locator("#email-facts [data-field='price'], #my-products [data-field='price']").count() === 0, "price field still on the screen");
     const marks = await page.locator("#email-preview mark").allTextContents();
-    assert(marks.includes("1,500"), "1,500 not marked: " + JSON.stringify(marks));
-    assert(!marks.includes("7") && !marks.includes("4,95"), "sourced numbers marked: " + JSON.stringify(marks));
+    assert(marks.includes("1,500") && marks.includes("4,95") && marks.includes("7"), "numbers not marked: " + JSON.stringify(marks));
+    const warn = await page.textContent("#warnings");
+    assert(warn.includes("no prices and no numbers") && warn.includes("1,500"), "no warning for numbers: " + warn);
   });
 
   // ---------- Insurance comparison, call notes, saved research ----------
@@ -511,12 +516,12 @@ async function waitEdit(page) {
   });
 
   await test("Per-email fact edits are not saved", async () => {
-    const page = await newPage(browser, { settings: { productFacts: { personal_liability: { price: "5,50 EUR" } } } });
+    const page = await newPage(browser, { settings: { productFacts: { personal_liability: { benefit: "Old benefit" } } } });
     await pickOffer(page, ["personal_liability"]);
-    await page.fill('#email-facts [data-product="personal_liability"] [data-field="price"]', "9,99 EUR");
+    await page.fill('#email-facts [data-product="personal_liability"] [data-field="benefit"]', "New benefit");
     await page.reload();
-    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("oew.settings")).productFacts.personal_liability.price);
-    assert(saved === "5,50 EUR", "per-email edit leaked into saved settings: " + saved);
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("oew.settings")).productFacts.personal_liability.benefit);
+    assert(saved === "Old benefit", "per-email edit leaked into saved settings: " + saved);
   });
 
   // ---------- New feature: remove products ----------
@@ -573,7 +578,7 @@ async function waitEdit(page) {
     await page.fill("#signature", "Robin Example\nAllianz agent\nhttps://cal.example.com/robin");
     await page.fill("#instructions", "Keep it short. Mention my weekend appointments.");
     await page.locator('#my-products details[data-product="legal_protection"] > summary .product-name').click();
-    await page.fill("#mp-legal_protection-price", "19,90 EUR per month");
+    await page.fill("#mp-legal_protection-benefit", "19,90 EUR per month");
     await page.fill("#own-en", "Cyber protection");
     await page.fill("#own-de", "Internetschutz");
     await page.click("#own-add");
@@ -583,7 +588,7 @@ async function waitEdit(page) {
     assert((await page.inputValue("#api-key")) === FAKE_KEY, "API key lost");
     assert((await page.inputValue("#signature")).includes("Allianz agent"), "signature lost");
     assert((await page.inputValue("#instructions")).includes("weekend"), "instructions lost");
-    assert((await page.inputValue("#mp-legal_protection-price")) === "19,90 EUR per month", "product facts lost");
+    assert((await page.inputValue("#mp-legal_protection-benefit")) === "19,90 EUR per month", "product facts lost");
     assert((await page.locator('#picker-offer .picker-item:has-text("Cyber protection")').count()) === 1, "own product not in offer list");
   });
 

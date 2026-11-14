@@ -302,7 +302,7 @@ function commonChecks(label, out, lang, signature) {
     check("Live 2: email generated", run.failed === 0, run.progress.join(" | "));
     const money = out.email.match(MONEY) || [];
     const others = money.filter((m) => !/4[.,]95|\b50\b/.test(m));
-    check("Live 2: email uses the entered price and cover", /4[.,]95/.test(out.email) && /50 million|50 Mio/i.test(out.email), money.join(", "));
+    check("Live 2: no prices or cover amounts, even when the agent entered them", money.length === 0, money.join(", "));
     check("Live 2: no other money amounts", others.length === 0, others.join(", "));
     commonChecks("Live 2", out, "en", SIGNATURE);
     const graded = await grade(out.email, [{ product: "Personal liability", agent_facts: facts }, { product: "Legal protection", agent_facts: "none" }], "English");
