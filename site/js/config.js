@@ -25,9 +25,6 @@ export const LENGTH_WORDS = {
   long: { base: 540, extraPerProduct: 270 },
 };
 
-// Target length in words for follow-up email 1 and follow-up email 2.
-export const FOLLOW_UP_WORDS = [110, 70];
-
 // Saved research. The facts for one country and one product are kept in the browser
 // for this number of days. After that the tool searches the web again.
 export const RESEARCH_KEEP_DAYS = 90;

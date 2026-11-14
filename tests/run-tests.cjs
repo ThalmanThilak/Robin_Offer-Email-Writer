@@ -336,7 +336,7 @@ async function waitEdit(page) {
     assert(!marks.includes("7") && !marks.includes("4,95"), "sourced numbers marked: " + JSON.stringify(marks));
   });
 
-  // ---------- Insurance comparison, call notes, saved research, follow-up emails ----------
+  // ---------- Insurance comparison, call notes, saved research ----------
 
   await test("Insurance comparison: research asks for HOME_INSURANCE facts, panel shows them, no client details in research", async () => {
     const { page, bodies } = await generateWith(browser, { api: defaultApi({ lines: INSURANCE_LINES, write: writeResult({ used_notes: ["N1", "N2", "N3", "N4", "N5"] }) }), offer: ["personal_liability"] });
@@ -441,60 +441,6 @@ async function waitEdit(page) {
   await test("Saved research: weak research is not saved", async () => {
     const { page } = await generateWith(browser, { api: defaultApi({ lines: [{ tag: "[P1|HOME]", text: "Only one fact.", source: SRC.rent }] }), offer: ["personal_liability"] });
     assert((await page.evaluate(() => localStorage.getItem("oew.research"))) === null, "weak research was saved");
-  });
-
-  await test("Follow-up emails: two more emails from the same notes, no web search, tabs to switch", async () => {
-    const followApi = (body) => {
-      if (body.stream) return { stream: researchStream({ query: "q", results: Object.values(SRC), lines: RESEARCH_LINES }) };
-      const text = JSON.stringify(body.messages);
-      if (text.includes("Change request")) return { json: jsonReply(writeResult({ subject_lines: ["One more point"], email_body: "{{SALUTATION}}\n\nShorter follow-up.", whatsapp_message: "{{SALUTATION}} Short.", used_notes: ["N5"] })) };
-      if (text.includes("follow-up email number 2")) return { json: jsonReply(writeResult({ subject_lines: ["Last short note"], email_body: "{{SALUTATION}}\n\nThis is my last note on this topic.", whatsapp_message: "{{SALUTATION}} Last note.", used_notes: ["N4"] })) };
-      if (text.includes("follow-up email number 1")) return { json: jsonReply(writeResult({ subject_lines: ["One more point"], email_body: "{{SALUTATION}}\n\nOne more point about liability.\n\nKind regards", whatsapp_message: "{{SALUTATION}} One more point.", used_notes: ["N5"] })) };
-      return { json: jsonReply(writeResult()) };
-    };
-    const { page, bodies } = await generateWith(browser, { api: followApi, settings: { signature: "Robin Example" } });
-    assert(await page.isHidden("#versions"), "tabs shown before a follow-up exists");
-    await page.click("#follow-up");
-    await waitEdit(page);
-    assert(bodies.length === 3, "expected 1 more call");
-    const call = JSON.parse(bodies[2].raw);
-    assert(!call.tools && !call.stream && call.output_config?.format?.type === "json_schema", "follow-up call searched or is not strict JSON");
-    const msg = call.messages[0].content;
-    assert(msg.includes("<earlier_emails>") && msg.includes("Imagine your child scratches a parked car") && msg.includes("<notes>"), "earlier email or notes not sent");
-    assert(msg.includes("about 110 words"), "follow-up length not sent");
-    assert(!/priya|ramanathan/i.test(bodies[2].raw), "name in follow-up request");
-    let preview = await page.textContent("#email-preview");
-    assert(preview.includes("Dear Ms. Ramanathan,") && preview.includes("One more point about liability.") && preview.includes("Robin Example"), "follow-up not shown: " + preview);
-    assert((preview.match(/Kind regards/g) || []).length === 1, "closing wrong in follow-up");
-    assert(!(await page.textContent("#warnings")).includes("fewer than 2 facts"), "home facts warning shown for a follow-up");
-    assert((await page.locator("#versions button").allTextContents()).join("|") === "Email 1|Follow-up 1", "tabs wrong");
-
-    await page.click('[data-edit="shorter"]');
-    await waitEdit(page);
-    assert(JSON.parse(bodies[3].raw).messages[0].content.includes("follow-up email number 1 you wrote earlier"), "edit of a follow-up used the first email text");
-    assert((await page.textContent("#email-preview")).includes("Shorter follow-up."), "edited follow-up not shown");
-
-    await page.click("#follow-up");
-    await waitEdit(page);
-    const second = JSON.parse(bodies[4].raw).messages[0].content;
-    assert(second.includes("follow-up email number 2") && second.includes("Shorter follow-up.") && second.includes("about 70 words"), "second follow-up did not get the earlier emails");
-    assert((await page.locator("#versions button").count()) === 3 && (await page.isHidden("#follow-up")), "third tab missing or button still shown");
-    assert((await page.textContent("#subjects")).includes("Last short note"), "subject of follow-up 2 not shown");
-
-    await page.click('#versions button[data-version="0"]');
-    preview = await page.textContent("#email-preview");
-    assert(preview.includes("Imagine your child scratches a parked car"), "email 1 not shown again");
-    await page.click('#versions button[data-version="2"]');
-    await page.click("#copy-email");
-    await page.waitForSelector('[data-copied-for="copy-email"]:not([hidden])');
-    const copied = await page.evaluate(() => navigator.clipboard.readText());
-    assert(copied.includes("This is my last note on this topic.") && copied.includes("Dear Ms. Ramanathan,"), "copy did not take the follow-up: " + copied);
-    assert((await page.textContent("#whatsapp")).includes("Last note."), "WhatsApp of the follow-up not shown");
-    await page.screenshot({ path: path.join(OUT, "follow-up.png"), fullPage: true });
-
-    await page.click("#regenerate");
-    await waitDone(page);
-    assert(await page.isHidden("#versions"), "tabs not reset after Generate again");
   });
 
   // ---------- Privacy ----------

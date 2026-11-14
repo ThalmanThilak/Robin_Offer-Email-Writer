@@ -49,12 +49,6 @@ The facts for one country and one product are saved in Robin's browser (localSto
 - Settings, Saved research shows how many are saved and has a delete button.
 - If Robin clears "cookies and site data" in his browser, the saved facts are gone. The tool then searches the web again. Clearing only the history or the cache does not delete them.
 
-## Follow-up emails
-After an email is written, "Write follow-up email" writes a short second email for a client who did not reply. A second click writes a third and last email. Both use the same facts and need no web search.
-- Nothing is saved. The follow-up emails are gone when Robin reloads the page or writes an email for another client.
-- Robin should copy all emails right away, for example into Outlook drafts or with a delayed send.
-- To change the length, edit `FOLLOW_UP_WORDS` in `site/js/config.js`.
-
 ## Change the number of web searches
 In `site/js/config.js`, change `MAX_SEARCHES`. Each search costs 1 US cent.
 

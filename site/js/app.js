@@ -1,5 +1,5 @@
 // Offer Email Writer: connects the screen to the settings, the API calls and the checks.
-import { PRODUCT_GROUPS, LENGTH_WORDS, CLOSINGS, RESEARCH_KEEP_DAYS, FOLLOW_UP_WORDS } from "./config.js";
+import { PRODUCT_GROUPS, LENGTH_WORDS, CLOSINGS, RESEARCH_KEEP_DAYS } from "./config.js";
 import { t, setLanguage, getLanguage, applyTranslations } from "./i18n.js";
 import { countryList, codeForName, englishCountryName } from "./countries.js";
 import * as store from "./storage.js";
@@ -17,7 +17,7 @@ import {
 } from "./checks.js";
 import { markdownToHtml, markdownToPlain, signatureToHtml, plainText } from "./render.js";
 import { copyRich, copyPlain } from "./clipboard.js";
-import { research, write, edit, followUp, testConnection, AppError } from "./api.js";
+import { research, write, edit, testConnection, AppError } from "./api.js";
 import { buildCase, buildResearchCase, cleanFacts } from "./prompt.js";
 
 const DEFAULT_IDS = new Set(PRODUCT_GROUPS.flatMap((g) => g.products.map((p) => p.id)));
@@ -401,7 +401,7 @@ function progressStep(text, final = false) {
 
 function setBusy(on) {
   state.busy = on;
-  for (const b of document.querySelectorAll("#generate, #regenerate, #research-again, #follow-up, [data-edit]")) b.disabled = on;
+  for (const b of document.querySelectorAll("#generate, #regenerate, #research-again, [data-edit]")) b.disabled = on;
   $("generate").classList.toggle("is-busy", on);
 }
 
@@ -430,8 +430,7 @@ function agentFactsText(input) {
 }
 
 // Runs the code checks on a reply: markup out, dashes out, closing out, then content checks.
-// followUp: true for a follow-up email. It is short, so it does not need 2 home country facts.
-function checkResult(raw, notes, input, followUp = false) {
+function checkResult(raw, notes, input) {
   let dashesFixed = false;
   const fix = (s, where) => {
     const r = removeDashes(cleanText(s, where));
@@ -460,15 +459,11 @@ function checkResult(raw, notes, input, followUp = false) {
   ];
   const checkedText = [result.email_body, result.whatsapp_message, ...result.subject_lines].join("\n");
   const products = input.offer.map((p, i) => ({ p, key: `P${i + 1}` }));
-  const homeShort = followUp
-    ? []
-    : products
-        .filter(({ key }) => used.filter((n) => n.product === key && n.about === "home").length < MIN_HOME_FACTS)
-        .map(({ p }) => productLabel(p));
+  const homeShort = products
+    .filter(({ key }) => used.filter((n) => n.product === key && n.about === "home").length < MIN_HOME_FACTS)
+    .map(({ p }) => productLabel(p));
   // The research found nothing about this insurance in the home country, so the comparison block is missing.
-  const noInsurance = followUp
-    ? []
-    : products.filter(({ key }) => !notes.some((n) => n.product === key && n.about === "home_insurance")).map(({ p }) => productLabel(p));
+  const noInsurance = products.filter(({ key }) => !notes.some((n) => n.product === key && n.about === "home_insurance")).map(({ p }) => productLabel(p));
 
   return {
     result,
@@ -483,18 +478,13 @@ function checkResult(raw, notes, input, followUp = false) {
   };
 }
 
-// The email on screen: email 1 or one of the follow-up emails.
-function active() {
-  return state.last.emails[state.last.active];
-}
-
 function filled(text) {
   return fillNames(text, state.last.names);
 }
 
 // Email body plus the closing line in the email's language. No closing if the signature starts with one.
 function composedBody() {
-  const body = filled(active().result.email_body);
+  const body = filled(state.last.checked.result.email_body);
   const signature = state.settings.signature || "";
   if (signatureStartsWithClosing(signature)) return body;
   return `${body}\n\n${CLOSINGS[state.last.names.lang] || CLOSINGS.en}`;
@@ -552,10 +542,9 @@ function renderFacts(notes) {
 function renderResult() {
   const last = state.last;
   if (!last) return;
-  const { result, badNumbers, informal, ruleTalk, promises, homeShort, noInsurance, dashesFixed, factsPanel } = active();
+  const { result, badNumbers, informal, ruleTalk, promises, homeShort, noInsurance, dashesFixed, factsPanel } = last.checked;
   $("result-empty").hidden = true;
   $("result").hidden = false;
-  renderVersions();
 
   const subjects = $("subjects");
   subjects.replaceChildren();
@@ -609,30 +598,6 @@ function dateText(iso) {
   return new Date(iso).toLocaleDateString(getLanguage() === "de" ? "de-DE" : "en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
 
-// The tabs "Email 1", "Follow-up 1", "Follow-up 2". Shown only when a follow-up email exists.
-function renderVersions() {
-  const last = state.last;
-  const box = $("versions");
-  box.replaceChildren();
-  box.hidden = last.emails.length < 2;
-  last.emails.forEach((_, i) => {
-    const b = document.createElement("button");
-    b.type = "button";
-    b.setAttribute("role", "tab");
-    b.dataset.version = String(i);
-    b.textContent = i === 0 ? t("version_first") : t("version_follow", { n: String(i) });
-    b.classList.toggle("is-on", i === last.active);
-    b.setAttribute("aria-selected", String(i === last.active));
-    b.addEventListener("click", () => {
-      if (state.busy) return;
-      last.active = i;
-      renderResult();
-    });
-    box.append(b);
-  });
-  $("follow-up").hidden = last.emails.length > FOLLOW_UP_WORDS.length;
-}
-
 function flash(note, ok) {
   note.textContent = ok ? t("copied") : t("copy_failed");
   note.classList.toggle("is-error", !ok);
@@ -654,7 +619,7 @@ function showResultError(err) {
 // Token use of the last action, and the notes behind it. Read by the live tests. Holds no names.
 function recordUsage(calls) {
   window.__oewLastUsage = { calls };
-  const c = state.last ? active() : null;
+  const c = state.last?.checked;
   window.__oewLastResult = c
     ? { notes: state.last.notes, usedNotes: c.result.used_notes, homeShort: c.homeShort, noInsurance: c.noInsurance, ruleTalk: c.ruleTalk, promises: c.promises, badNumbers: c.badNumbers }
     : null;
@@ -729,8 +694,7 @@ async function onGenerate(fresh = false) {
       caseData,
       notes: found.notes,
       savedAt: found.savedAt,
-      emails: [checkResult(written.result, found.notes, form.input)],
-      active: 0,
+      checked: checkResult(written.result, found.notes, form.input),
     };
     recordUsage([...found.usage, ...written.usage]);
     renderResult();
@@ -744,52 +708,17 @@ async function onGenerate(fresh = false) {
   }
 }
 
-// What the model gets of an email: the text only, with placeholders in place of names.
-function emailForModel(checked, names) {
-  const r = checked.result;
-  return scrubDeep({ subject_lines: r.subject_lines, email_body: r.email_body, whatsapp_message: r.whatsapp_message }, names);
-}
-
-// Writes the next follow-up email from the saved notes and the earlier emails. No web search.
-async function onFollowUp() {
-  if (state.busy || !state.last) return;
-  const last = state.last;
-  const number = last.emails.length;
-  if (number > FOLLOW_UP_WORDS.length) return;
-  setBusy(true);
-  $("busy-edit").hidden = false;
-  showResultError(null);
-  try {
-    const out = await followUp({
-      apiKey: store.loadApiKey(),
-      caseData: last.caseData,
-      notes: last.notes,
-      previous: last.emails.map((e) => emailForModel(e, last.names)),
-      number,
-    });
-    last.emails.push(checkResult(out.result, last.notes, last.input, true));
-    last.active = last.emails.length - 1;
-    recordUsage(out.usage);
-    renderResult();
-  } catch (err) {
-    showResultError(err);
-  } finally {
-    $("busy-edit").hidden = true;
-    setBusy(false);
-  }
-}
-
 async function onEdit(kind) {
   if (state.busy || !state.last) return;
   const last = state.last;
-  const index = last.active;
-  const current = emailForModel(last.emails[index], last.names);
+  const r = last.checked.result;
+  const current = scrubDeep({ subject_lines: r.subject_lines, email_body: r.email_body, whatsapp_message: r.whatsapp_message }, last.names);
   setBusy(true);
   $("busy-edit").hidden = false;
   showResultError(null);
   try {
-    const out = await edit({ apiKey: store.loadApiKey(), caseData: last.caseData, notes: last.notes, current, kind, followUp: index });
-    last.emails[index] = checkResult(out.result, last.notes, last.input, index > 0);
+    const out = await edit({ apiKey: store.loadApiKey(), caseData: last.caseData, notes: last.notes, current, kind });
+    last.checked = checkResult(out.result, last.notes, last.input);
     recordUsage(out.usage);
     renderResult();
   } catch (err) {
@@ -811,7 +740,7 @@ async function onCopyEmail() {
 
 async function onCopyWhatsapp() {
   if (!state.last) return;
-  const ok = await copyPlain(filled(active().result.whatsapp_message));
+  const ok = await copyPlain(filled(state.last.checked.result.whatsapp_message));
   flash(document.querySelector('[data-copied-for="copy-whatsapp"]'), ok);
 }
 
@@ -1056,7 +985,6 @@ function init() {
   $("generate").addEventListener("click", () => onGenerate());
   $("regenerate").addEventListener("click", () => onGenerate());
   $("research-again").addEventListener("click", () => onGenerate(true));
-  $("follow-up").addEventListener("click", onFollowUp);
   $("research-clear").addEventListener("click", () => {
     store.clearResearch();
     renderResearchCount();

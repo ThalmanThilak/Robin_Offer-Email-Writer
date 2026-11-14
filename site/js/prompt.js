@@ -83,14 +83,6 @@ Use bullets or numbered points where they make this easier to read.
 - Keep close to "target_length_words" for the email body.
 - Write the email, the subject lines and the WhatsApp message in "email_language".
 
-# Follow-up emails
-When the message asks for a follow-up email, the client got the earlier emails and did not reply. Then:
-- The structure for each product does not apply. No headings. No full story again.
-- Refer to the earlier email in one short sentence, without blame. Never write "you did not reply" or "I am still waiting".
-- Give one new reason to read: a fact from the notes that the earlier emails did not use, or a new short angle on the same topic.
-- Follow-up 2 is the last one. Say kindly that you will not write again about this topic and that the client can come back any time.
-- All fixed rules still apply. Subject lines must differ from the earlier ones.
-
 # Format of "email_body"
 Plain text with simple Markdown only: "## " for a heading, **bold** for a few key words, "- " for bullet points, "1. " for numbered points, an empty line between paragraphs. No tables, no emojis.
 
@@ -220,51 +212,7 @@ const EDITS = {
   formal: "Make the tone more formal and more polite. Apply the same tone to the WhatsApp message.",
 };
 
-const FOLLOW_UP_EDITS = {
-  shorter: "Make this follow-up email about one third shorter. Keep the next step. Shorten the WhatsApp message to match.",
-  longer: "Make this follow-up email a little longer, using the notes. Do not add new facts. It must stay much shorter than a first email.",
-};
-
-// previous: the earlier emails of this chain, oldest first. number: 1 or 2.
-export function followUpMessage(caseData, notes, previous, number, words) {
-  return `Write follow-up email number ${number} for this case. The client got the earlier emails and did not reply.
-
-<case>
-${JSON.stringify(caseData, null, 2)}
-</case>
-
-<notes>
-${JSON.stringify(notesForWriter(notes), null, 2)}
-</notes>
-
-<earlier_emails>
-${JSON.stringify(previous, null, 2)}
-</earlier_emails>
-
-Follow the rules for follow-up emails. The email body has about ${words} words, not "target_length_words". The WhatsApp message has 2 or 3 sentences. Start both with {{SALUTATION}}. Return 2 or 3 subject lines and the ids of all notes this email uses.`;
-}
-
-// followUp: 0 for the first email, 1 or 2 for a follow-up email.
-export function editMessage(caseData, notes, current, kind, followUp = 0) {
-  if (followUp) {
-    return `Here is follow-up email number ${followUp} you wrote earlier for this case, as JSON. It is a short follow-up, not a first email.
-
-<case>
-${JSON.stringify(caseData, null, 2)}
-</case>
-
-<notes>
-${JSON.stringify(notesForWriter(notes), null, 2)}
-</notes>
-
-<current_email>
-${JSON.stringify(current, null, 2)}
-</current_email>
-
-Change request: ${FOLLOW_UP_EDITS[kind] || EDITS[kind]}
-
-All fixed rules and the rules for follow-up emails still apply. Keep the placeholders {{SALUTATION}}, {{FIRST_NAME}} and {{LAST_NAME}} as they are. Use only facts from the notes and "agent_facts". Return the complete new version, with 2 or 3 subject lines and the ids of all notes the new version uses.`;
-  }
+export function editMessage(caseData, notes, current, kind) {
   return `Here is an email you wrote earlier for this case, as JSON.
 
 <case>

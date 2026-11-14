@@ -759,21 +759,6 @@ summary .badge {
   color: var(--muted);
 }
 
-/* Email 1 and follow-up tabs */
-.versions {
-  margin-bottom: 12px;
-}
-
-.follow-up-row {
-  margin-top: 16px;
-  padding-top: 14px;
-  border-top: 1px solid rgba(128, 128, 128, 0.25);
-}
-
-.follow-up-row .hint {
-  margin-top: 8px;
-}
-
 .saved-research {
   display: flex;
   flex-wrap: wrap;
@@ -784,9 +769,5 @@ summary .badge {
 }
 
 .saved-research[hidden] {
-  display: none;
-}
-
-.versions[hidden] {
   display: none;
 }
