@@ -373,7 +373,7 @@ async function waitEdit(page) {
     assert(!msg.includes("Software engineer") && !msg.includes('"age"') && !msg.includes("married"), "client details were sent to research: " + msg);
     const writing = JSON.parse(bodies[1].raw);
     const rules = writing.system[0].text;
-    assert(rules.includes("The example from the home country") && rules.includes("Never compare the two countries a second time"), "writing prompt does not use the home country as the example");
+    assert(rules.includes("the example from the home country") && rules.includes("Never compare the two countries a second time") && rules.includes("Why the agent is writing") && rules.includes("Never invent a reason") && rules.includes("The product is never named before") && rules.includes("Never use disasters"), "writing prompt does not use the home country as the example");
     assert(!rules.includes("The insurance itself, there and here") && rules.includes("wish about the client's day") && rules.includes("Never mention or hint at religion, caste"), "old comparison block still there, or wish or religion rule missing");
     assert(research.system[0].text.includes("Never give facts about religion, caste"), "research prompt has no religion rule");
     assert((writing.messages[0].content.match(/"about": "home_insurance"/g) || []).length === 2, "home_insurance notes not sent to the writer");

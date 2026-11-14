@@ -47,7 +47,14 @@ Every email tells a story close to the client's life and shows the difference be
 Emails never show prices, cover amounts or any other numbers, also when they are known. Robin adds them by hand after he copies the email. The tool marks every number that still appears and shows a warning. For this reason My products has no price field.
 
 ## How the email is built
-The email starts with a short wish about the client's day. Then it explains the insurance with one example from the client's home country, says how the same thing works in Germany, says what the insurance does, and offers a short call. It is plain running text with no labels, and the home country appears once. It never mentions religion or caste, and the tool warns Robin if it does.
+The email is built in this order:
+1. A short wish about the client's day.
+2. Why Robin is writing, in 1 or 2 sentences. The tool takes this from the email goal, Robin's notes or "Products the client already has" (for example "I was looking at your existing insurances, and you have a good mix"). It never invents a reason. Tip for Robin: tick the products the client already has and add a note such as "rents a flat in Reilingen".
+3. The client's own situation in Germany, with no product name yet.
+4. One example from the client's home country, with a short bridge sentence before it. Everyday cases only, no disasters.
+5. How people handle it in Germany. The product is named here for the first time, with what it does.
+6. A short call with one concrete reason.
+ It is plain running text with no labels, and the home country appears once. It never mentions religion or caste, and the tool warns Robin if it does.
 
 The research also looks for the same kind of insurance in the client's home country: its local name, if the law requires it, how common it is. These facts go into the home country example. In "Facts to check" these facts have the label "This insurance in (country)".
 
