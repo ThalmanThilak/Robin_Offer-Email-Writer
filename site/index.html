@@ -97,6 +97,12 @@
             <input id="children" type="number" min="0" max="20" inputmode="numeric">
           </label>
         </div>
+
+        <label class="field">
+          <span><span data-i18n="f_client_notes">Notes from the call or meeting</span> <span class="opt" data-i18n="optional">(optional)</span></span>
+          <textarea id="client-notes" rows="3" data-i18n-placeholder="ph_client_notes"></textarea>
+        </label>
+        <p class="hint" data-i18n="hint_client_notes">The email uses these notes. They are sent to Claude without the name and are not saved.</p>
       </div>
 
       <div class="card">
@@ -164,6 +170,7 @@
             <h3 data-i18n="h_email">Email</h3>
             <span id="busy-edit" class="busy" hidden data-i18n="working">Working...</span>
           </div>
+          <div id="versions" class="segmented versions" role="tablist" hidden></div>
           <div id="email-preview" class="email-preview"></div>
           <div class="edit-buttons">
             <button type="button" class="button" data-edit="shorter" data-i18n="btn_shorter">Shorter</button>
@@ -175,6 +182,10 @@
           <div class="copy-row">
             <button type="button" id="copy-email" class="button primary big" data-i18n="btn_copy_email">Copy email</button>
             <span class="copied" data-copied-for="copy-email" hidden data-i18n="copied">Copied</span>
+          </div>
+          <div class="follow-up-row">
+            <button type="button" class="button" id="follow-up" data-i18n="btn_follow_up">Write follow-up email</button>
+            <p class="hint" data-i18n="hint_follow_up">For a client who did not reply. Uses the same facts, without a new web search. Up to 2 follow-up emails.</p>
           </div>
         </div>
 
@@ -190,6 +201,10 @@
         <div class="card facts-card">
           <h3 data-i18n="h_facts">Facts to check</h3>
           <p class="hint" data-i18n="hint_facts">Check these before you send. This panel is never copied.</p>
+          <div id="saved-research" class="saved-research" hidden>
+            <span id="saved-research-text"></span>
+            <button type="button" class="button small" id="research-again" data-i18n="btn_research_again">Search again</button>
+          </div>
           <div id="warnings"></div>
           <ul id="facts" class="facts"></ul>
         </div>
@@ -259,6 +274,16 @@
       </div>
       <button type="button" id="own-add" class="button" data-i18n="btn_add_product">Add product</button>
       <p id="own-message" class="message" role="status" hidden></p>
+    </div>
+
+    <div class="card">
+      <h2 data-i18n="h_saved_research">Saved research</h2>
+      <p class="hint" data-i18n="hint_saved_research">The facts for a country and a product are saved in this browser. The next email for the same country and product is faster and needs no web search. No client details are saved.</p>
+      <p id="research-count" class="hint"></p>
+      <div class="button-row">
+        <button type="button" id="research-clear" class="button danger" data-i18n="btn_research_clear">Delete saved research</button>
+      </div>
+      <p id="research-message" class="message" role="status" hidden></p>
     </div>
 
     <div class="card">

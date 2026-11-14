@@ -35,6 +35,26 @@ In `site/js/config.js`, change these lines:
 `export const MODEL_WRITE = "claude-sonnet-5-5";`
 Use an exact model name from the Anthropic models page: https://platform.claude.com/docs/en/about-claude/models/overview
 
+## Insurance comparison
+The research also looks for the same kind of insurance in the client's home country: its local name, if the law requires it, how common it is. The email shows this in a short block with two bullet points, one for the home country and one for Germany. In "Facts to check" these facts have the label "This insurance in (country)".
+
+## Notes from the call or meeting
+Robin can type notes about the client in "Client details". The email uses them. The notes go to Claude without the client's name. They are not saved.
+
+## Saved research
+The facts for one country and one product are saved in Robin's browser (localStorage). There is no database. The next email for the same country and product uses the saved facts, so it is faster and needs no web search.
+- No client details are saved. The saved facts are about the country and the product only.
+- Facts are kept for 90 days. To change this, edit `RESEARCH_KEEP_DAYS` in `site/js/config.js`.
+- "Search again" in "Facts to check" runs a new web search and replaces the saved facts.
+- Settings, Saved research shows how many are saved and has a delete button.
+- If Robin clears "cookies and site data" in his browser, the saved facts are gone. The tool then searches the web again. Clearing only the history or the cache does not delete them.
+
+## Follow-up emails
+After an email is written, "Write follow-up email" writes a short second email for a client who did not reply. A second click writes a third and last email. Both use the same facts and need no web search.
+- Nothing is saved. The follow-up emails are gone when Robin reloads the page or writes an email for another client.
+- Robin should copy all emails right away, for example into Outlook drafts or with a delayed send.
+- To change the length, edit `FOLLOW_UP_WORDS` in `site/js/config.js`.
+
 ## Change the number of web searches
 In `site/js/config.js`, change `MAX_SEARCHES`. Each search costs 1 US cent.
 

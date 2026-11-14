@@ -43,6 +43,16 @@ const RESEARCH_LINES = [
   { tag: "[P2|HOME]", text: "Civil court cases in India can take 7 years or more.", source: SRC.courts },
   { tag: "[P2|HOME]", text: "Many people settle disputes through family or community elders.", source: SRC.courts },
   { tag: "[P2|GERMANY]", text: "In Germany, each side usually pays its own lawyer in the first labour court instance.", source: SRC.bgb },
+  { tag: "[P2|HOME_INSURANCE]", text: "Legal expenses insurance is rare for private persons in India.", source: SRC.courts },
+];
+
+// One product with facts about the same insurance in the home country.
+const INSURANCE_LINES = [
+  { tag: "[P1|HOME]", text: "In Bengaluru, landlords often ask for a deposit of up to 10 months of rent.", source: SRC.rent },
+  { tag: "[P1|HOME]", text: "Small damage to a neighbour's property is often settled by a direct payment between families.", source: SRC.courts },
+  { tag: "[P1|HOME_INSURANCE]", text: "Personal liability insurance is not required by law in India.", source: SRC.courts },
+  { tag: "**[P1|HOME INSURANCE]**", text: "Few households in India buy a personal liability policy.", source: SRC.courts },
+  { tag: "[P1|GERMANY]", text: "In Germany, a person who causes damage must pay for all of it by law.", source: SRC.bgb },
 ];
 
 function writeResult(extra = {}) {
@@ -324,6 +334,167 @@ async function waitEdit(page) {
     const marks = await page.locator("#email-preview mark").allTextContents();
     assert(marks.includes("1,500"), "1,500 not marked: " + JSON.stringify(marks));
     assert(!marks.includes("7") && !marks.includes("4,95"), "sourced numbers marked: " + JSON.stringify(marks));
+  });
+
+  // ---------- Insurance comparison, call notes, saved research, follow-up emails ----------
+
+  await test("Insurance comparison: research asks for HOME_INSURANCE facts, panel shows them, no client details in research", async () => {
+    const { page, bodies } = await generateWith(browser, { api: defaultApi({ lines: INSURANCE_LINES, write: writeResult({ used_notes: ["N1", "N2", "N3", "N4", "N5"] }) }), offer: ["personal_liability"] });
+    const research = JSON.parse(bodies[0].raw);
+    assert(research.system[0].text.includes("[P1|HOME_INSURANCE]"), "research prompt does not ask for HOME_INSURANCE");
+    const msg = research.messages[0].content;
+    assert(msg.includes('"home_country": "India"') && msg.includes("Karnataka"), "country or region missing in research: " + msg);
+    assert(!msg.includes("Software engineer") && !msg.includes('"age"') && !msg.includes("married"), "client details were sent to research: " + msg);
+    const writing = JSON.parse(bodies[1].raw);
+    assert(writing.system[0].text.includes("The insurance itself, there and here"), "writing prompt has no comparison block");
+    assert((writing.messages[0].content.match(/"about": "home_insurance"/g) || []).length === 2, "home_insurance notes not sent to the writer");
+    const labels = await page.locator("#facts .fact-about").allTextContents();
+    assert(labels.filter((l) => l === "This insurance in India").length === 2, "panel labels wrong: " + JSON.stringify(labels));
+    assert(!(await page.textContent("#warnings")).includes("No facts found about this insurance"), "wrong warning shown");
+  });
+
+  await test("Insurance comparison: warning when the research found nothing about the insurance at home", async () => {
+    const { page } = await generateWith(browser);
+    const warn = await page.textContent("#warnings");
+    assert(warn.includes("No facts found about this insurance") && warn.includes("Personal liability") && !warn.includes("Personal liability (Privathaftpflichtversicherung), Legal"), "warning wrong: " + warn);
+  });
+
+  await test("Call notes: sent to the writer without the name, not sent to research, not saved", async () => {
+    const page = await newPage(browser);
+    const bodies = await fakeApi(page, defaultApi());
+    await fillClient(page);
+    await page.fill("#client-notes", "Priya has a dog and pays 1450 euros rent. Mr Ramanathan asked about the price.");
+    await pickOffer(page, ["personal_liability", "legal_protection"]);
+    await page.click("#generate");
+    await waitDone(page);
+    assert(!bodies[0].raw.includes("has a dog"), "call notes were sent to research");
+    const msg = JSON.parse(bodies[1].raw).messages[0].content;
+    assert(msg.includes("agent_notes_about_client") && msg.includes("{{FIRST_NAME}} has a dog") && msg.includes("Mr {{LAST_NAME}} asked"), "call notes not sent or name not replaced: " + msg.slice(0, 900));
+    for (const b of bodies) assert(!/priya|ramanathan/i.test(b.raw), "name found in a request body");
+    const stored = await page.evaluate(() => JSON.stringify(Object.entries(localStorage)));
+    assert(!/has a dog|priya|ramanathan|1450|Software engineer/i.test(stored), "client details were saved in the browser: " + stored.slice(0, 300));
+  });
+
+  await test("Saved research: second email for the same country and product needs no web search", async () => {
+    const { page, bodies } = await generateWith(browser);
+    assert(bodies.length === 2, "first email: expected 2 calls");
+    assert(await page.isHidden("#saved-research"), "saved research note shown for new research");
+    await page.fill("#first-name", "Arjun");
+    await page.fill("#age", "45");
+    await page.click("#generate");
+    await waitDone(page);
+    assert(bodies.length === 3, "second email: expected 1 more call, got " + (bodies.length - 2));
+    const second = JSON.parse(bodies[2].raw);
+    assert(!second.tools && !second.stream, "second email searched the web");
+    assert(second.messages[0].content.includes("Civil court cases in India can take 7 years or more."), "saved notes not sent to the writer");
+    assert((await page.textContent("#progress")).includes("Using saved facts"), "no progress line for saved facts");
+    assert((await page.textContent("#saved-research")).includes("Facts from saved research"), "no saved research note");
+    assert((await page.locator("#facts a").count()) > 0, "sources lost in saved research");
+    const stored = await page.evaluate(() => localStorage.getItem("oew.research"));
+    assert(stored && !/priya|arjun|ramanathan|Software engineer|married/i.test(stored), "saved research holds client details");
+    await page.screenshot({ path: path.join(OUT, "saved-research.png"), fullPage: true });
+
+    await page.reload();
+    await fakeApi(page, defaultApi());
+    await fillClient(page, { first: "Meera" });
+    await pickOffer(page, ["personal_liability", "legal_protection"]);
+    await page.click("#generate");
+    await waitDone(page);
+    assert((await page.textContent("#progress")).includes("Using saved facts"), "saved research lost after reload");
+
+    await page.click("#research-again");
+    await waitDone(page);
+    assert(!(await page.textContent("#progress")).includes("Using saved facts"), "Search again used the saved facts");
+    assert((await page.textContent("#progress")).includes("Searching:"), "Search again did not search");
+  });
+
+  await test("Saved research: only the new product is researched; another country searches again; delete works", async () => {
+    const { page, bodies } = await generateWith(browser, { api: defaultApi({ lines: INSURANCE_LINES }), offer: ["personal_liability"] });
+    await page.unroute("https://api.anthropic.com/**");
+    const more = await fakeApi(page, defaultApi({ lines: [
+      { tag: "[P1|HOME]", text: "Civil court cases in India can take 7 years or more.", source: SRC.courts },
+      { tag: "[P1|HOME]", text: "Many people settle disputes through family or community elders.", source: SRC.courts },
+      { tag: "[P1|GERMANY]", text: "In Germany, each side usually pays its own lawyer in the first labour court instance.", source: SRC.bgb },
+    ] }));
+    await pickOffer(page, ["legal_protection"]);
+    await page.click("#generate");
+    await waitDone(page);
+    assert(more.length === 2, "expected research and writing, got " + more.length);
+    const research = JSON.parse(more[0].raw).messages[0].content;
+    assert(research.includes("Legal protection") && !research.includes("Personal liability"), "saved product was researched again: " + research);
+    const notes = JSON.parse(JSON.parse(more[1].raw).messages[0].content.split("<notes>")[1].split("</notes>")[0]);
+    assert(notes.filter((n) => n.product === "P1").length === 5 && notes.filter((n) => n.product === "P2").length === 3, "notes not joined by product: " + JSON.stringify(notes.map((n) => n.product)));
+    assert(notes.map((n) => n.id).join() === "N1,N2,N3,N4,N5,N6,N7,N8", "note ids wrong");
+
+    await page.fill("#country", "Brazil");
+    await page.click("#generate");
+    await waitDone(page);
+    assert(more.length === 4 && JSON.parse(more[2].raw).stream, "another country did not search again");
+
+    await page.click('.tab[data-view="settings"]');
+    assert((await page.textContent("#research-count")).includes("Saved now: 3"), "count wrong: " + (await page.textContent("#research-count")));
+    await page.click("#research-clear");
+    assert((await page.textContent("#research-count")).includes("Saved now: 0"), "delete did not work");
+    assert((await page.evaluate(() => localStorage.getItem("oew.research"))) === null, "storage not cleared");
+  });
+
+  await test("Saved research: weak research is not saved", async () => {
+    const { page } = await generateWith(browser, { api: defaultApi({ lines: [{ tag: "[P1|HOME]", text: "Only one fact.", source: SRC.rent }] }), offer: ["personal_liability"] });
+    assert((await page.evaluate(() => localStorage.getItem("oew.research"))) === null, "weak research was saved");
+  });
+
+  await test("Follow-up emails: two more emails from the same notes, no web search, tabs to switch", async () => {
+    const followApi = (body) => {
+      if (body.stream) return { stream: researchStream({ query: "q", results: Object.values(SRC), lines: RESEARCH_LINES }) };
+      const text = JSON.stringify(body.messages);
+      if (text.includes("Change request")) return { json: jsonReply(writeResult({ subject_lines: ["One more point"], email_body: "{{SALUTATION}}\n\nShorter follow-up.", whatsapp_message: "{{SALUTATION}} Short.", used_notes: ["N5"] })) };
+      if (text.includes("follow-up email number 2")) return { json: jsonReply(writeResult({ subject_lines: ["Last short note"], email_body: "{{SALUTATION}}\n\nThis is my last note on this topic.", whatsapp_message: "{{SALUTATION}} Last note.", used_notes: ["N4"] })) };
+      if (text.includes("follow-up email number 1")) return { json: jsonReply(writeResult({ subject_lines: ["One more point"], email_body: "{{SALUTATION}}\n\nOne more point about liability.\n\nKind regards", whatsapp_message: "{{SALUTATION}} One more point.", used_notes: ["N5"] })) };
+      return { json: jsonReply(writeResult()) };
+    };
+    const { page, bodies } = await generateWith(browser, { api: followApi, settings: { signature: "Robin Example" } });
+    assert(await page.isHidden("#versions"), "tabs shown before a follow-up exists");
+    await page.click("#follow-up");
+    await waitEdit(page);
+    assert(bodies.length === 3, "expected 1 more call");
+    const call = JSON.parse(bodies[2].raw);
+    assert(!call.tools && !call.stream && call.output_config?.format?.type === "json_schema", "follow-up call searched or is not strict JSON");
+    const msg = call.messages[0].content;
+    assert(msg.includes("<earlier_emails>") && msg.includes("Imagine your child scratches a parked car") && msg.includes("<notes>"), "earlier email or notes not sent");
+    assert(msg.includes("about 110 words"), "follow-up length not sent");
+    assert(!/priya|ramanathan/i.test(bodies[2].raw), "name in follow-up request");
+    let preview = await page.textContent("#email-preview");
+    assert(preview.includes("Dear Ms. Ramanathan,") && preview.includes("One more point about liability.") && preview.includes("Robin Example"), "follow-up not shown: " + preview);
+    assert((preview.match(/Kind regards/g) || []).length === 1, "closing wrong in follow-up");
+    assert(!(await page.textContent("#warnings")).includes("fewer than 2 facts"), "home facts warning shown for a follow-up");
+    assert((await page.locator("#versions button").allTextContents()).join("|") === "Email 1|Follow-up 1", "tabs wrong");
+
+    await page.click('[data-edit="shorter"]');
+    await waitEdit(page);
+    assert(JSON.parse(bodies[3].raw).messages[0].content.includes("follow-up email number 1 you wrote earlier"), "edit of a follow-up used the first email text");
+    assert((await page.textContent("#email-preview")).includes("Shorter follow-up."), "edited follow-up not shown");
+
+    await page.click("#follow-up");
+    await waitEdit(page);
+    const second = JSON.parse(bodies[4].raw).messages[0].content;
+    assert(second.includes("follow-up email number 2") && second.includes("Shorter follow-up.") && second.includes("about 70 words"), "second follow-up did not get the earlier emails");
+    assert((await page.locator("#versions button").count()) === 3 && (await page.isHidden("#follow-up")), "third tab missing or button still shown");
+    assert((await page.textContent("#subjects")).includes("Last short note"), "subject of follow-up 2 not shown");
+
+    await page.click('#versions button[data-version="0"]');
+    preview = await page.textContent("#email-preview");
+    assert(preview.includes("Imagine your child scratches a parked car"), "email 1 not shown again");
+    await page.click('#versions button[data-version="2"]');
+    await page.click("#copy-email");
+    await page.waitForSelector('[data-copied-for="copy-email"]:not([hidden])');
+    const copied = await page.evaluate(() => navigator.clipboard.readText());
+    assert(copied.includes("This is my last note on this topic.") && copied.includes("Dear Ms. Ramanathan,"), "copy did not take the follow-up: " + copied);
+    assert((await page.textContent("#whatsapp")).includes("Last note."), "WhatsApp of the follow-up not shown");
+    await page.screenshot({ path: path.join(OUT, "follow-up.png"), fullPage: true });
+
+    await page.click("#regenerate");
+    await waitDone(page);
+    assert(await page.isHidden("#versions"), "tabs not reset after Generate again");
   });
 
   // ---------- Privacy ----------

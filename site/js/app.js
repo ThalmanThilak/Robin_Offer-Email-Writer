@@ -1,5 +1,5 @@
 // Offer Email Writer: connects the screen to the settings, the API calls and the checks.
-import { PRODUCT_GROUPS, LENGTH_WORDS, CLOSINGS } from "./config.js";
+import { PRODUCT_GROUPS, LENGTH_WORDS, CLOSINGS, RESEARCH_KEEP_DAYS, FOLLOW_UP_WORDS } from "./config.js";
 import { t, setLanguage, getLanguage, applyTranslations } from "./i18n.js";
 import { countryList, codeForName, englishCountryName } from "./countries.js";
 import * as store from "./storage.js";
@@ -17,8 +17,8 @@ import {
 } from "./checks.js";
 import { markdownToHtml, markdownToPlain, signatureToHtml, plainText } from "./render.js";
 import { copyRich, copyPlain } from "./clipboard.js";
-import { research, write, edit, testConnection, AppError } from "./api.js";
-import { buildCase, buildResearchCase } from "./prompt.js";
+import { research, write, edit, followUp, testConnection, AppError } from "./api.js";
+import { buildCase, buildResearchCase, cleanFacts } from "./prompt.js";
 
 const DEFAULT_IDS = new Set(PRODUCT_GROUPS.flatMap((g) => g.products.map((p) => p.id)));
 
@@ -363,6 +363,7 @@ function readForm() {
       emailLanguage: state.emailLang,
       lengthWords: lengthWords(state.length, offer.length),
       bookingLinks: bookingLinks(),
+      clientNotes: $("client-notes").value.trim(),
       instructions: state.settings.instructions.trim(),
     },
   };
@@ -400,7 +401,7 @@ function progressStep(text, final = false) {
 
 function setBusy(on) {
   state.busy = on;
-  for (const b of document.querySelectorAll("#generate, #regenerate, [data-edit]")) b.disabled = on;
+  for (const b of document.querySelectorAll("#generate, #regenerate, #research-again, #follow-up, [data-edit]")) b.disabled = on;
   $("generate").classList.toggle("is-busy", on);
 }
 
@@ -429,7 +430,8 @@ function agentFactsText(input) {
 }
 
 // Runs the code checks on a reply: markup out, dashes out, closing out, then content checks.
-function checkResult(raw, notes, input) {
+// followUp: true for a follow-up email. It is short, so it does not need 2 home country facts.
+function checkResult(raw, notes, input, followUp = false) {
   let dashesFixed = false;
   const fix = (s, where) => {
     const r = removeDashes(cleanText(s, where));
@@ -451,15 +453,22 @@ function checkResult(raw, notes, input) {
     agentFactsText(input),
     ...notes.filter((n) => n.sources.length).map((n) => n.fact),
     input.instructions,
+    input.clientNotes,
     String(input.age),
     String(input.years),
     String(input.children),
   ];
   const checkedText = [result.email_body, result.whatsapp_message, ...result.subject_lines].join("\n");
-  const homeShort = input.offer
-    .map((p, i) => ({ p, key: `P${i + 1}` }))
-    .filter(({ key }) => used.filter((n) => n.product === key && n.about === "home").length < MIN_HOME_FACTS)
-    .map(({ p }) => productLabel(p));
+  const products = input.offer.map((p, i) => ({ p, key: `P${i + 1}` }));
+  const homeShort = followUp
+    ? []
+    : products
+        .filter(({ key }) => used.filter((n) => n.product === key && n.about === "home").length < MIN_HOME_FACTS)
+        .map(({ p }) => productLabel(p));
+  // The research found nothing about this insurance in the home country, so the comparison block is missing.
+  const noInsurance = followUp
+    ? []
+    : products.filter(({ key }) => !notes.some((n) => n.product === key && n.about === "home_insurance")).map(({ p }) => productLabel(p));
 
   return {
     result,
@@ -469,8 +478,14 @@ function checkResult(raw, notes, input) {
     ruleTalk: findRuleTalk(checkedText),
     promises: findPromises(checkedText, agentFactsText(input)),
     homeShort,
+    noInsurance,
     dashesFixed,
   };
+}
+
+// The email on screen: email 1 or one of the follow-up emails.
+function active() {
+  return state.last.emails[state.last.active];
 }
 
 function filled(text) {
@@ -479,7 +494,7 @@ function filled(text) {
 
 // Email body plus the closing line in the email's language. No closing if the signature starts with one.
 function composedBody() {
-  const body = filled(state.last.checked.result.email_body);
+  const body = filled(active().result.email_body);
   const signature = state.settings.signature || "";
   if (signatureStartsWithClosing(signature)) return body;
   return `${body}\n\n${CLOSINGS[state.last.names.lang] || CLOSINGS.en}`;
@@ -509,7 +524,8 @@ function renderFacts(notes) {
       li.className = "fact " + (n.sources.length ? "is-verified" : "is-unverified");
       const about = document.createElement("p");
       about.className = "fact-about";
-      about.textContent = n.about === "product" ? t("about_product") : n.country;
+      about.textContent =
+        n.about === "product" ? t("about_product") : n.about === "home_insurance" ? t("about_home_insurance", { country: n.country }) : n.country;
       const claim = document.createElement("p");
       claim.className = "fact-claim";
       claim.textContent = n.fact;
@@ -536,9 +552,10 @@ function renderFacts(notes) {
 function renderResult() {
   const last = state.last;
   if (!last) return;
-  const { result, badNumbers, informal, ruleTalk, promises, homeShort, dashesFixed, factsPanel } = last.checked;
+  const { result, badNumbers, informal, ruleTalk, promises, homeShort, noInsurance, dashesFixed, factsPanel } = active();
   $("result-empty").hidden = true;
   $("result").hidden = false;
+  renderVersions();
 
   const subjects = $("subjects");
   subjects.replaceChildren();
@@ -575,13 +592,45 @@ function renderResult() {
     warnings.append(p);
   };
   if (homeShort.length) warn(t("warn_home_facts", { list: homeShort.join(", ") }));
+  if (noInsurance.length) warn(t("warn_no_insurance", { list: noInsurance.join(", ") }));
   if (promises.length) warn(t("warn_promises", { list: promises.map((p) => `"${p}"`).join(", ") }));
   if (ruleTalk.length) warn(t("warn_rule_talk", { list: ruleTalk.map((p) => `"${p}"`).join(", ") }));
   if (badNumbers.length) warn(t("warn_numbers", { list: badNumbers.join(", ") }));
   if (informal) warn(t("warn_du"));
   if (dashesFixed) warn(t("warn_dashes"));
 
+  $("saved-research").hidden = !last.savedAt;
+  if (last.savedAt) $("saved-research-text").textContent = t("saved_research_note", { date: dateText(last.savedAt) });
+
   renderFacts(factsPanel);
+}
+
+function dateText(iso) {
+  return new Date(iso).toLocaleDateString(getLanguage() === "de" ? "de-DE" : "en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
+
+// The tabs "Email 1", "Follow-up 1", "Follow-up 2". Shown only when a follow-up email exists.
+function renderVersions() {
+  const last = state.last;
+  const box = $("versions");
+  box.replaceChildren();
+  box.hidden = last.emails.length < 2;
+  last.emails.forEach((_, i) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.setAttribute("role", "tab");
+    b.dataset.version = String(i);
+    b.textContent = i === 0 ? t("version_first") : t("version_follow", { n: String(i) });
+    b.classList.toggle("is-on", i === last.active);
+    b.setAttribute("aria-selected", String(i === last.active));
+    b.addEventListener("click", () => {
+      if (state.busy) return;
+      last.active = i;
+      renderResult();
+    });
+    box.append(b);
+  });
+  $("follow-up").hidden = last.emails.length > FOLLOW_UP_WORDS.length;
 }
 
 function flash(note, ok) {
@@ -605,33 +654,72 @@ function showResultError(err) {
 // Token use of the last action, and the notes behind it. Read by the live tests. Holds no names.
 function recordUsage(calls) {
   window.__oewLastUsage = { calls };
-  const c = state.last?.checked;
+  const c = state.last ? active() : null;
   window.__oewLastResult = c
-    ? { notes: state.last.notes, usedNotes: c.result.used_notes, homeShort: c.homeShort, ruleTalk: c.ruleTalk, promises: c.promises, badNumbers: c.badNumbers }
+    ? { notes: state.last.notes, usedNotes: c.result.used_notes, homeShort: c.homeShort, noInsurance: c.noInsurance, ruleTalk: c.ruleTalk, promises: c.promises, badNumbers: c.badNumbers }
     : null;
 }
 
-async function onGenerate() {
-  if (state.busy) return;
-  const form = readForm();
-  if (!form) return;
-  const apiKey = store.loadApiKey();
-  const researchCase = scrubDeep(buildResearchCase(form.input), form.names);
-  const caseData = scrubDeep(buildCase(form.input), form.names);
+// A product's research is saved only when it is good enough to use again.
+function worthSaving(notes) {
+  return notes.filter((n) => n.about === "home").length >= MIN_HOME_FACTS && notes.some((n) => n.about === "germany");
+}
 
-  setBusy(true);
-  progressReset();
-  progressStep(t("progress_research"));
-  showResultError(null);
-  try {
-    const found = await research({
+// Gets the notes for every product to offer: from the saved research where it exists,
+// from a new web search for the rest. fresh: true always searches again.
+async function collectNotes(form, apiKey, fresh) {
+  const { input, names } = form;
+  const keys = input.offer.map((p) => store.researchKey(input.country, input.region, p));
+  // Without Robin's own product facts, the email needs general facts about this type of insurance.
+  const needProduct = input.offer.map((p) => Object.keys(cleanFacts(p.facts)).length === 0);
+  const saved = input.offer.map((_, i) => (fresh ? null : store.getResearch(keys[i], needProduct[i], RESEARCH_KEEP_DAYS)));
+  const missing = input.offer.map((_, i) => i).filter((i) => !saved[i]);
+  const savedDates = saved.filter(Boolean).map((e) => e.at).sort();
+  const savedAt = savedDates[0] || null;
+
+  let found = { notes: [], usage: [] };
+  if (savedAt) progressStep(t("progress_saved", { date: dateText(savedAt) }));
+  if (missing.length) {
+    progressStep(t("progress_research"));
+    found = await research({
       apiKey,
-      researchCase,
-      homeCountry: form.input.country,
+      researchCase: scrubDeep(buildResearchCase(input, missing), names),
+      homeCountry: input.country,
       onProgress: (p) => {
         if (p.type === "search") progressStep(t("progress_search", { q: p.query }));
       },
     });
+  }
+
+  const notes = [];
+  input.offer.forEach((p, i) => {
+    let list;
+    if (saved[i]) {
+      list = saved[i].notes;
+    } else {
+      const key = `P${missing.indexOf(i) + 1}`;
+      list = found.notes.filter((n) => n.product === key);
+      if (worthSaving(list)) store.putResearch(keys[i], list, needProduct[i]);
+    }
+    for (const n of list) notes.push({ ...n, id: `N${notes.length + 1}`, product: `P${i + 1}` });
+  });
+  if (!notes.length) throw new AppError("research_empty");
+  renderResearchCount();
+  return { notes, usage: found.usage, savedAt };
+}
+
+async function onGenerate(fresh = false) {
+  if (state.busy) return;
+  const form = readForm();
+  if (!form) return;
+  const apiKey = store.loadApiKey();
+  const caseData = scrubDeep(buildCase(form.input), form.names);
+
+  setBusy(true);
+  progressReset();
+  showResultError(null);
+  try {
+    const found = await collectNotes(form, apiKey, fresh);
     progressStep(t("progress_writing"));
     const written = await write({ apiKey, caseData, notes: found.notes });
     progressStep(t("progress_checking"));
@@ -640,7 +728,9 @@ async function onGenerate() {
       input: form.input,
       caseData,
       notes: found.notes,
-      checked: checkResult(written.result, found.notes, form.input),
+      savedAt: found.savedAt,
+      emails: [checkResult(written.result, found.notes, form.input)],
+      active: 0,
     };
     recordUsage([...found.usage, ...written.usage]);
     renderResult();
@@ -654,17 +744,52 @@ async function onGenerate() {
   }
 }
 
-async function onEdit(kind) {
+// What the model gets of an email: the text only, with placeholders in place of names.
+function emailForModel(checked, names) {
+  const r = checked.result;
+  return scrubDeep({ subject_lines: r.subject_lines, email_body: r.email_body, whatsapp_message: r.whatsapp_message }, names);
+}
+
+// Writes the next follow-up email from the saved notes and the earlier emails. No web search.
+async function onFollowUp() {
   if (state.busy || !state.last) return;
   const last = state.last;
-  const r = last.checked.result;
-  const current = scrubDeep({ subject_lines: r.subject_lines, email_body: r.email_body, whatsapp_message: r.whatsapp_message }, last.names);
+  const number = last.emails.length;
+  if (number > FOLLOW_UP_WORDS.length) return;
   setBusy(true);
   $("busy-edit").hidden = false;
   showResultError(null);
   try {
-    const out = await edit({ apiKey: store.loadApiKey(), caseData: last.caseData, notes: last.notes, current, kind });
-    last.checked = checkResult(out.result, last.notes, last.input);
+    const out = await followUp({
+      apiKey: store.loadApiKey(),
+      caseData: last.caseData,
+      notes: last.notes,
+      previous: last.emails.map((e) => emailForModel(e, last.names)),
+      number,
+    });
+    last.emails.push(checkResult(out.result, last.notes, last.input, true));
+    last.active = last.emails.length - 1;
+    recordUsage(out.usage);
+    renderResult();
+  } catch (err) {
+    showResultError(err);
+  } finally {
+    $("busy-edit").hidden = true;
+    setBusy(false);
+  }
+}
+
+async function onEdit(kind) {
+  if (state.busy || !state.last) return;
+  const last = state.last;
+  const index = last.active;
+  const current = emailForModel(last.emails[index], last.names);
+  setBusy(true);
+  $("busy-edit").hidden = false;
+  showResultError(null);
+  try {
+    const out = await edit({ apiKey: store.loadApiKey(), caseData: last.caseData, notes: last.notes, current, kind, followUp: index });
+    last.emails[index] = checkResult(out.result, last.notes, last.input, index > 0);
     recordUsage(out.usage);
     renderResult();
   } catch (err) {
@@ -686,7 +811,7 @@ async function onCopyEmail() {
 
 async function onCopyWhatsapp() {
   if (!state.last) return;
-  const ok = await copyPlain(filled(state.last.checked.result.whatsapp_message));
+  const ok = await copyPlain(filled(active().result.whatsapp_message));
   flash(document.querySelector('[data-copied-for="copy-whatsapp"]'), ok);
 }
 
@@ -717,6 +842,10 @@ function showMessage(id, text, kind = "ok") {
   box.textContent = text;
   box.className = `message ${kind}`;
   box.hidden = false;
+}
+
+function renderResearchCount() {
+  $("research-count").textContent = t("research_count", { n: String(store.countResearch()), days: String(RESEARCH_KEEP_DAYS) });
 }
 
 function updateKeyBanner() {
@@ -892,6 +1021,7 @@ function refreshLanguage() {
   applyTranslations();
   renderCountries();
   renderAllProducts();
+  renderResearchCount();
   $("key-toggle").textContent = $("api-key").type === "password" ? t("btn_show") : t("btn_hide");
   if (state.last) renderResult();
 }
@@ -923,8 +1053,15 @@ function init() {
     refreshLanguage();
   });
 
-  $("generate").addEventListener("click", onGenerate);
-  $("regenerate").addEventListener("click", onGenerate);
+  $("generate").addEventListener("click", () => onGenerate());
+  $("regenerate").addEventListener("click", () => onGenerate());
+  $("research-again").addEventListener("click", () => onGenerate(true));
+  $("follow-up").addEventListener("click", onFollowUp);
+  $("research-clear").addEventListener("click", () => {
+    store.clearResearch();
+    renderResearchCount();
+    showMessage("research-message", t("research_cleared"));
+  });
   for (const b of document.querySelectorAll("[data-edit]")) b.addEventListener("click", () => onEdit(b.dataset.edit));
   $("copy-email").addEventListener("click", onCopyEmail);
   $("copy-whatsapp").addEventListener("click", onCopyWhatsapp);

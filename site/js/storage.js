@@ -113,4 +113,55 @@ export function parseBackup(text) {
   }
 }
 
+// ---------- Saved research ----------
+// Facts for one home country and one product. No client details are saved here.
+
+const KEY_RESEARCH = "oew.research";
+const MAX_RESEARCH_ENTRIES = 200;
+
+function loadResearch() {
+  try {
+    const data = JSON.parse(read(KEY_RESEARCH) || "{}");
+    return data && typeof data === "object" && !Array.isArray(data) ? data : {};
+  } catch {
+    return {};
+  }
+}
+
+export function researchKey(country, region, product) {
+  return [country, region || "", product.en, product.de].map((s) => String(s).trim().toLocaleLowerCase()).join("|");
+}
+
+// Returns { at, notes } or null. needProduct: the email needs general facts about this type of insurance.
+export function getResearch(key, needProduct, keepDays) {
+  const entry = loadResearch()[key];
+  if (!entry || !Array.isArray(entry.notes) || !entry.notes.length) return null;
+  const age = Date.now() - Date.parse(entry.at);
+  if (!Number.isFinite(age) || age > keepDays * 24 * 60 * 60 * 1000) return null;
+  if (needProduct && !entry.withProduct) return null;
+  return entry;
+}
+
+// withProduct: this research also looked for general facts about this type of insurance.
+export function putResearch(key, notes, withProduct) {
+  const all = loadResearch();
+  all[key] = {
+    at: new Date().toISOString(),
+    withProduct: Boolean(withProduct),
+    notes: notes.map((n) => ({ about: n.about, country: n.country, fact: n.fact, sources: n.sources })),
+  };
+  // Keep the newest entries only, so the browser storage never fills up.
+  const keys = Object.keys(all).sort((a, b) => Date.parse(all[b].at) - Date.parse(all[a].at));
+  for (const old of keys.slice(MAX_RESEARCH_ENTRIES)) delete all[old];
+  return write(KEY_RESEARCH, JSON.stringify(all));
+}
+
+export function countResearch() {
+  return Object.keys(loadResearch()).length;
+}
+
+export function clearResearch() {
+  return write(KEY_RESEARCH, null);
+}
+
 export { PRODUCT_FACT_FIELDS };

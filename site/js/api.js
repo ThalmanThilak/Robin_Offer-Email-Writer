@@ -1,8 +1,8 @@
 // All calls to the Claude API. The browser talks only to api.anthropic.com.
 // Step 1 (research) uses web search. Step 2 (write) and the edit buttons never search.
 import Anthropic from "../vendor/anthropic-sdk.js";
-import { MODEL_RESEARCH, MODEL_WRITE, EFFORT_RESEARCH, EFFORT_WRITE, EFFORT_EDIT, MAX_SEARCHES } from "./config.js";
-import { RESEARCH_PROMPT, WRITING_PROMPT, WRITE_SCHEMA, researchMessage, writeMessage, editMessage } from "./prompt.js";
+import { MODEL_RESEARCH, MODEL_WRITE, EFFORT_RESEARCH, EFFORT_WRITE, EFFORT_EDIT, MAX_SEARCHES, FOLLOW_UP_WORDS } from "./config.js";
+import { RESEARCH_PROMPT, WRITING_PROMPT, WRITE_SCHEMA, researchMessage, writeMessage, editMessage, followUpMessage } from "./prompt.js";
 import { parseResearch } from "./research.js";
 
 // If the model declines (very rare), the API retries on a fallback model by itself.
@@ -147,8 +147,14 @@ export function write({ apiKey, caseData, notes }) {
 }
 
 // Edit buttons: rewrite from the saved notes. No web search.
-export function edit({ apiKey, caseData, notes, current, kind }) {
-  return writeCall(apiKey, editMessage(caseData, notes, current, kind), EFFORT_EDIT, "edit");
+export function edit({ apiKey, caseData, notes, current, kind, followUp = 0 }) {
+  return writeCall(apiKey, editMessage(caseData, notes, current, kind, followUp), EFFORT_EDIT, "edit");
+}
+
+// Follow-up email 1 or 2: written from the saved notes and the earlier emails. No web search.
+export function followUp({ apiKey, caseData, notes, previous, number }) {
+  const words = FOLLOW_UP_WORDS[number - 1] || FOLLOW_UP_WORDS[FOLLOW_UP_WORDS.length - 1];
+  return writeCall(apiKey, followUpMessage(caseData, notes, previous, number, words), EFFORT_WRITE, "followup");
 }
 
 // A tiny request to check the key, the credit and the connection.

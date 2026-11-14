@@ -20,10 +20,17 @@ export const MAX_SEARCHES = 10;
 // Each extra product adds the "extra" number of words.
 // Robin never sees these numbers.
 export const LENGTH_WORDS = {
-  short: { base: 200, extraPerProduct: 120 },
-  medium: { base: 350, extraPerProduct: 200 },
-  long: { base: 500, extraPerProduct: 250 },
+  short: { base: 220, extraPerProduct: 130 },
+  medium: { base: 380, extraPerProduct: 220 },
+  long: { base: 540, extraPerProduct: 270 },
 };
+
+// Target length in words for follow-up email 1 and follow-up email 2.
+export const FOLLOW_UP_WORDS = [110, 70];
+
+// Saved research. The facts for one country and one product are kept in the browser
+// for this number of days. After that the tool searches the web again.
+export const RESEARCH_KEEP_DAYS = 90;
 
 // The closing line the tool adds before the signature, by email language.
 // It is left out when the signature already starts with a closing line.
