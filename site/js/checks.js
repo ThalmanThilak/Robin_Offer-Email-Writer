@@ -127,6 +127,19 @@ export function findPromises(text, agentFactsText) {
   return PROMISES.filter((p) => lower.includes(p) && !facts.includes(p));
 }
 
+// Invented urgency. The email may be urgent, but only with real reasons.
+const FAKE_URGENCY = [
+  "limited offer", "limited time", "only today", "only this week", "last chance", "act now", "before it is too late", "before it's too late",
+  "offer ends", "offer expires", "don't miss", "do not miss", "hurry",
+  "nur heute", "nur diese woche", "nur noch", "letzte chance", "bevor es zu sp\u00e4t ist", "angebot endet", "befristetes angebot", "jetzt zuschlagen", "beeilen sie sich",
+];
+
+export function findFakeUrgency(text, agentFactsText) {
+  const lower = (text || "").toLowerCase();
+  const facts = (agentFactsText || "").toLowerCase();
+  return FAKE_URGENCY.filter((p) => lower.includes(p) && !facts.includes(p));
+}
+
 // ---------- Closing line ----------
 
 const CLOSING_LINE = /^(kind regards|best regards|warm regards|regards|best wishes|all the best|best|sincerely|yours sincerely|yours faithfully|yours truly|thanks|thank you|many thanks|cheers|mit freundlichen gr\u00fc(?:\u00df|ss)en|freundliche gr\u00fc(?:\u00df|ss)e|viele gr\u00fc(?:\u00df|ss)e|beste gr\u00fc(?:\u00df|ss)e|herzliche gr\u00fc(?:\u00df|ss)e|liebe gr\u00fc(?:\u00df|ss)e|sch\u00f6ne gr\u00fc(?:\u00df|ss)e|gru(?:\u00df|ss)|danke|vielen dank|mfg|lg|vg)\b[\s,.!]*$/i;

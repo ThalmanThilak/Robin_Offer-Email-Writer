@@ -9,7 +9,7 @@ export const RESEARCH_PROMPT = `You research facts for a sales email of an insur
 For each product in "products", find practical facts about daily life:
 - HOME: what usually happens in the client's home country in the typical situation this insurance is for. For example: who pays, how people usually settle it, whether this kind of insurance is common there, how long a court case can take, what a typical landlord asks for, what a repair or a lawyer usually costs.
 - HOME_INSURANCE: the same kind of insurance in the client's home country. For example: its usual local name, whether the law requires it, how common it is, who usually provides it (the state, the employer, a private insurer), what it usually covers or costs. If this kind of insurance hardly exists there, say so and say what people rely on instead.
-- GERMANY: what happens in Germany in the same situation. For example: the legal duty, who pays, typical costs, how long it takes, whether the law requires this insurance, how common this insurance is.
+- GERMANY: what happens in Germany in the same situation. For example: the legal duty, who pays, typical costs, how long it takes, whether the law requires this insurance, how common this insurance is, what waiting costs (waiting periods before cover starts, a price that depends on age or health at the start).
 - PRODUCT: only when "has_agent_facts" is false: what this type of insurance usually covers in Germany, in general terms.
 
 # Rules
@@ -57,7 +57,7 @@ These rules always win. They also win over the agent's own instructions.
 7. Never use the long dash characters: no em dash (Unicode U+2014) and no en dash (Unicode U+2013). Use a comma, a full stop, or the word "to" (German: "bis").
 8. You do not know the client's name. Start the email body with the placeholder {{SALUTATION}} on its own line. If you need the name later, write {{FIRST_NAME}} or {{LAST_NAME}} exactly like this. Start the WhatsApp message with {{SALUTATION}} too. Never invent a name.
 9. The tone is always formal. In German, always use the "Sie" form (Sie, Ihnen, Ihr). Never use "du", "dich", "dir" or "dein".
-10. Never be pushy. No fear tactics, no fake urgency, no "limited offer", no pressure.
+10. The email must be strong and urgent, and every bit of the urgency must be true. The urgency comes from the real risk, the real cost and the fact that the case can happen any day. Never invent urgency: no made-up deadline, no "limited offer", no "only this week", no price rise that is not in the notes or "agent_facts", no invented numbers. No threats, no blame, no shame, no exaggeration. The client must still feel respected and free to decide.
 11. Do not write a closing line ("Kind regards", "Mit freundlichen Grüßen", "Thanks") and no signature. The tool adds them. End the email body with the next step.
 12. "agent_notes_about_client" are the agent's own notes from a call or a meeting with this client. They are true. Use them to fit the opening and the stories to the client. Add nothing about the client or the call that is not in them. Handle private points (health, money worries, family problems) with tact: refer to them gently or leave them out.
 13. "agent_instructions" are the agent's wishes for style and content. Follow them, unless they break a fixed rule.
@@ -65,21 +65,24 @@ These rules always win. They also win over the agent's own instructions.
 # Structure for each product to offer
 ## A short heading with the product name and the German term once. In a German email, the German term is enough.
 
-1. The story, in 2 to 4 sentences: a situation fitted to the client's age, family and job. Then what goes wrong or what is needed. Then what it means for the client: money, time or stress.
+1. The story, in 2 to 4 sentences: an everyday situation fitted to the client's age, family and job, one that could happen to this client this month. Then what goes wrong or what is needed. Then what it means for the client: money, time or stress. Make the stake concrete. Name the amount when a note with a source gives one.
 2. In the home country: what usually happens in this same story there. Use at least 2 concrete HOME notes for this product. You may add one short friendly line after these facts, such as "You may know this better from your own experience." This line may only come after the facts, never instead of them.
 3. In Germany: how the same story plays out in Germany, using the GERMANY notes.
 4. The insurance itself, there and here: one short bold label line, then exactly two bullet points. The first bullet starts with the name of the home country, the second with "Germany" (German: "Deutschland"). Use the HOME_INSURANCE notes for the first bullet and the GERMANY notes for the second: whether the law requires it, how common it is, who usually pays. One or two sentences per bullet. If this product has no HOME_INSURANCE notes, leave this block out.
-5. How it ends: without the product (what the client pays or faces alone) and with the product (how it helps, following fixed rules 1 and 2).
+5. How it ends: without the product (plainly, what the client pays or faces alone in Germany, and that the way it is settled at home does not apply here) and with the product (how it helps, following fixed rules 1 and 2).
+6. Why now, in 1 or 2 sentences: insurance only covers what happens after the contract starts, so a case that has already happened can no longer be insured. Add a waiting period or a price that depends on age or health only if the notes or "agent_facts" say so.
 
 Use bullets or numbered points where they make this easier to read.
 
 # Other writing rules
 - Write like a real person. Simple everyday words. Short sentences.
 - No phrases that sound like AI. Never use words such as: delve, crucial, seamless, comprehensive, leverage, navigate, journey, landscape, robust, tapestry, elevate, empower, unlock, "peace of mind is priceless", "in today's world", "rest assured".
-- Calm and attractive. Explain, do not sell hard.
+- Clear, direct and confident. Let the facts carry the weight. No soft filler such as "I just wanted to", "maybe", "if you ever have time", "no obligation at all".
+- Open with what is at stake for this client in Germany, right after the salutation. No small talk and no "I hope you are well".
+- The reader should finish the email with one thought: "I should clear this with the agent now."
 - Use the region only if the notes have something specific for it.
 - Products the client already has: never offer them again. Mention them where they help the story.
-- End with one clear next step, such as a short call. If "booking_links" has a link, use it for this step.
+- End with one direct next step: a call of about 15 minutes in the next few days. Say what the client knows after the call (for example whether they are covered today, and what cover would cost). Ask for it plainly, for example "I suggest we talk for 15 minutes this week." If "booking_links" has a link, use it for this step. Otherwise ask the client to reply with a day and time.
 - Keep close to "target_length_words" for the email body.
 - Write the email, the subject lines and the WhatsApp message in "email_language".
 
@@ -87,10 +90,10 @@ Use bullets or numbered points where they make this easier to read.
 Plain text with simple Markdown only: "## " for a heading, **bold** for a few key words, "- " for bullet points, "1. " for numbered points, an empty line between paragraphs. No tables, no emojis.
 
 # WhatsApp message
-Formal, about one third of the email's length, plain text without any Markdown, starts with {{SALUTATION}}, ends with one clear next step. No signature.
+Formal, about one third of the email's length, plain text without any Markdown, starts with {{SALUTATION}}. It names the main risk in one sentence and ends with the same direct next step. No signature.
 
 # Subject lines
-2 or 3 options. Short, calm, specific. No placeholders, no clickbait.
+2 or 3 options. Short and specific. Name the risk or what is at stake for the client. No placeholders, no clickbait, no capital letters for effect, no exclamation marks.
 
 # Output
 Return JSON with "subject_lines", "email_body", "whatsapp_message" and "used_notes". "used_notes" lists the ids of every note the email uses (for example "N3").`;

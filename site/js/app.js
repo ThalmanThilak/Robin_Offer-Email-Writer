@@ -12,6 +12,7 @@ import {
   cleanText,
   findRuleTalk,
   findPromises,
+  findFakeUrgency,
   signatureStartsWithClosing,
   stripTrailingClosing,
 } from "./checks.js";
@@ -472,6 +473,7 @@ function checkResult(raw, notes, input) {
     informal: input.emailLanguage === "de" && looksInformalGerman(checkedText),
     ruleTalk: findRuleTalk(checkedText),
     promises: findPromises(checkedText, agentFactsText(input)),
+    fakeUrgency: findFakeUrgency(checkedText, agentFactsText(input)),
     homeShort,
     noInsurance,
     dashesFixed,
@@ -542,7 +544,7 @@ function renderFacts(notes) {
 function renderResult() {
   const last = state.last;
   if (!last) return;
-  const { result, badNumbers, informal, ruleTalk, promises, homeShort, noInsurance, dashesFixed, factsPanel } = last.checked;
+  const { result, badNumbers, informal, ruleTalk, promises, fakeUrgency, homeShort, noInsurance, dashesFixed, factsPanel } = last.checked;
   $("result-empty").hidden = true;
   $("result").hidden = false;
 
@@ -582,6 +584,7 @@ function renderResult() {
   };
   if (homeShort.length) warn(t("warn_home_facts", { list: homeShort.join(", ") }));
   if (noInsurance.length) warn(t("warn_no_insurance", { list: noInsurance.join(", ") }));
+  if (fakeUrgency.length) warn(t("warn_urgency", { list: fakeUrgency.map((p) => `"${p}"`).join(", ") }));
   if (promises.length) warn(t("warn_promises", { list: promises.map((p) => `"${p}"`).join(", ") }));
   if (ruleTalk.length) warn(t("warn_rule_talk", { list: ruleTalk.map((p) => `"${p}"`).join(", ") }));
   if (badNumbers.length) warn(t("warn_numbers", { list: badNumbers.join(", ") }));

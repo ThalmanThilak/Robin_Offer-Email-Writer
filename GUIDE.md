@@ -35,6 +35,14 @@ In `site/js/config.js`, change these lines:
 `export const MODEL_WRITE = "claude-sonnet-5-5";`
 Use an exact model name from the Anthropic models page: https://platform.claude.com/docs/en/about-claude/models/overview
 
+## Where the email rules are
+- `site/js/prompt.js` has the two prompts: `RESEARCH_PROMPT` (what to search) and `WRITING_PROMPT` (how to write). The "Fixed rules" in `WRITING_PROMPT` set the tone, the structure and what the email may never do.
+- `site/js/checks.js` has checks in code. They run on every email after it is written: long dashes, numbers without a source, promises, invented pressure wording, the "du" form.
+- Settings, My instructions holds Robin's own wishes. Every email follows them, unless they break a fixed rule.
+
+## Tone: strong and urgent, but true
+Every email shows what is at stake for the client, says why to act now, and asks for a 15 minute call. The urgency must come from real facts. The tool warns Robin if an email uses wording such as "limited offer" or "last chance".
+
 ## Insurance comparison
 The research also looks for the same kind of insurance in the client's home country: its local name, if the law requires it, how common it is. The email shows this in a short block with two bullet points, one for the home country and one for Germany. In "Facts to check" these facts have the label "This insurance in (country)".
 

@@ -309,6 +309,18 @@ async function waitEdit(page) {
     assert(warn.includes("talks about its own research or rules") && warn.includes("will not guess"), "rule-talk warning missing: " + warn);
   });
 
+  await test("Urgency: the prompt asks for strong, true urgency; invented pressure wording gets a warning", async () => {
+    const body = writeResult().email_body + "\n\nThis is a limited offer, so act now.";
+    const { page, bodies } = await generateWith(browser, { api: defaultApi({ write: writeResult({ email_body: body }) }) });
+    const system = JSON.parse(bodies[1].raw).system[0].text;
+    assert(system.includes("strong and urgent") && system.includes("Why now") && system.includes("Never invent urgency"), "urgency rules missing in the writing prompt");
+    assert(!system.includes("Never be pushy") && !system.includes("Calm and attractive"), "old calm rules still in the prompt");
+    const warn = await page.textContent("#warnings");
+    assert(warn.includes("pressure wording") && warn.includes('"limited offer"') && warn.includes('"act now"'), "no warning for invented urgency: " + warn);
+    const clean = await generateWith(browser);
+    assert(!(await clean.page.textContent("#warnings")).includes("pressure wording"), "urgency warning shown without cause");
+  });
+
   await test("Promise check: warns on 'no questions asked' unless it is in My products", async () => {
     const write = writeResult({ email_body: "{{SALUTATION}}\n\n## Glass\n\nIt covers any kind of damage, no questions asked." });
     let r = await generateWith(browser, { api: defaultApi({ write }), offer: ["glass"], settings: { productFacts: { glass: { covers: "Glass breakage of windows and doors" } } } });
