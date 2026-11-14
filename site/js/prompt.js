@@ -69,12 +69,7 @@ These rules always win. They also win over the agent's own instructions.
 The email is a short note from one person to another. It explains the insurance with an example from the client's home country, so the client understands it easily and sees why it matters in Germany.
 
 1. First line after the salutation: a short, warm wish about the client's day or week, in your own words, for example "I hope you are having a good week." One sentence. Vary it from email to email.
-2. Why the agent is writing, in 1 or 2 sentences. It must show that the agent cares about the client, and it must be true. Build it only from the case data. Choose the first of these that fits:
-   - "email_goal" is a follow-up after a call or an offer after a meeting: refer to that call or meeting, for example "After our call, one point stayed on my mind."
-   - "agent_notes_about_client" has a fitting point (a move, a new flat, a new job, a child): start from it.
-   - "products_client_already_has" is not empty: say the agent looked at the client's existing insurances, that they are a good base, and that one point stayed on his mind. For example "I was looking at your existing insurances, and you have a good mix. But I was thinking about your flat in Reilingen." Name the client's own flat, town, job or family only if the case data has it.
-   - Otherwise: a general line about how the agent works, for example "I am writing because there is one point I like to raise early with clients who have moved to Germany. Nobody tells you about it."
-   Never invent a reason: no call, no meeting, no review of documents and no event that is not in the case data. Do not name the product here.
+2. Why the agent is writing, in 1 or 2 sentences. It must show that the agent cares about the client, and it must be true. Use the idea in "opening_style" from the case. Its example shows the tone. Write it in your own words and fit it to this client, so that two emails never start the same way. Name the client's own flat, town, job or family only if the case data has it. Never invent a reason: no call, no meeting, no review of documents and no event that is not in the case data. Do not name the product here.
 3. Then, for each product, a few short paragraphs of plain running text, in this order:
    - The client's own life in Germany first: the everyday situation this is about, and what is not taken care of today. Fit it to the client's flat, town, family or job where the case data has it. No product name yet.
    - A bridge, then the example from the home country. The bridge is one short sentence that tells the client why the home country comes up, for example "I understand why this is easy to miss." Then say how this situation usually goes at home, and whether this kind of insurance is known there. Use the HOME and HOME_INSURANCE notes. Pick the 2 or 3 facts that explain it best. Leave out every fact that does not help the client understand this insurance.
@@ -135,6 +130,46 @@ const GOALS = {
     "Offer after a meeting. Refer briefly to the recent meeting and present the offer. For what was said in the meeting, use only \"agent_notes_about_client\". Do not invent what was said in the meeting.",
 };
 
+// Ways to open the email: why the agent is writing. One is picked at random for each email
+// from those that fit the case, so the emails do not all start the same way.
+// To add one: copy a line and change the text. Keep it true for every client it can reach.
+export const OPENINGS = {
+  // Email goal "Follow-up after a call".
+  call: [
+    'Refer to the recent call. Example: "After our call, one point stayed on my mind."',
+    'Refer to the recent call. Example: "Thank you for the call. There is one topic from it that I would like to put in writing for you."',
+  ],
+  // Email goal "Offer after a meeting".
+  meeting: [
+    'Refer to the recent meeting. Example: "After our meeting, one point stayed on my mind."',
+    'Refer to the recent meeting. Example: "Thank you for your time at our meeting. As a next step, here is the topic we looked at, in a few lines."',
+  ],
+  // First contact, and the client already has products.
+  has: [
+    'The agent looked at the client\'s existing insurances, finds them a good base, and one open point came to his mind. Example: "I was looking at your existing insurances, and you have a good mix. But I was thinking about your flat in Reilingen."',
+    'The client has already taken care of some things, and one topic is still open. Example: "You have already taken care of a few important things. One topic is still open, and I would like to share it with you."',
+  ],
+  // First contact, and Robin typed notes about the client.
+  notes: [
+    'Start from one fitting point in "agent_notes_about_client" (a move, a flat, a job, a child, a pet). Example: "I was thinking about your new flat, and one thought came to my mind."',
+  ],
+  // First contact, fits every client.
+  general: [
+    'A point the agent likes to raise early with clients who moved to Germany. Example: "I am writing because there is one point I like to raise early with clients who have moved to Germany. Nobody tells you about it, and most people only notice it after something has happened."',
+    'Some things work differently in Germany than at home. Example: "Some things in Germany work differently from what you know from home. One of them came to my mind for you, and I would like to share it."',
+    'The agent checks in with his clients from time to time. Example: "I like to check in with my clients from time to time. Today there is one topic I would like to share with you, because it is easy to miss."',
+  ],
+};
+
+// Picks one opening that fits the case. "random" can be replaced in tests.
+export function pickOpening(input, random = Math.random) {
+  let pool;
+  if (input.goal === "follow_up") pool = OPENINGS.call;
+  else if (input.goal === "offer") pool = OPENINGS.meeting;
+  else pool = [...OPENINGS.general, ...(input.has?.length ? OPENINGS.has : []), ...(input.clientNotes ? OPENINGS.notes : [])];
+  return pool[Math.min(pool.length - 1, Math.floor(random() * pool.length))];
+}
+
 const FACT_LABELS = {
   allianzName: "allianz_product_name",
   covers: "what_it_covers",
@@ -188,6 +223,7 @@ export function buildCase(input) {
   return {
     email_language: input.emailLanguage === "de" ? "German" : "English",
     email_goal: GOALS[input.goal] || GOALS.first_contact,
+    opening_style: pickOpening(input),
     target_length_words: input.lengthWords,
     client: clientData(input),
     products_to_offer: input.offer.map((p, i) => {

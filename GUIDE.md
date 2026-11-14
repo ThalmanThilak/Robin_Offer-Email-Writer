@@ -49,7 +49,7 @@ Emails never show prices, cover amounts or any other numbers, also when they are
 ## How the email is built
 The email is built in this order:
 1. A short wish about the client's day.
-2. Why Robin is writing, in 1 or 2 sentences. The tool takes this from the email goal, Robin's notes or "Products the client already has" (for example "I was looking at your existing insurances, and you have a good mix"). It never invents a reason. Tip for Robin: tick the products the client already has and add a note such as "rents a flat in Reilingen".
+2. Why Robin is writing, in 1 or 2 sentences. The tool picks one way to open at random for each email, from those that fit the client: after a call or meeting it refers to that; with "Products the client already has" it can use "I was looking at your existing insurances, and you have a good mix"; with notes it can start from a note; and three general openings fit every client. It never invents a reason. The list is `OPENINGS` in `site/js/prompt.js`. To add an opening, copy a line there and change the text.
 3. The client's own situation in Germany, with no product name yet.
 4. One example from the client's home country, with a short bridge sentence before it. Everyday cases only, no disasters.
 5. How people handle it in Germany. The product is named here for the first time, with what it does.

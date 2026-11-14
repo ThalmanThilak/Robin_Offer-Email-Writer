@@ -330,6 +330,37 @@ async function waitEdit(page) {
     assert(!(await clean.page.textContent("#warnings")).includes("mentions religion or caste"), "warning shown without cause");
   });
 
+  await test("Opening: one fitting way to start is picked at random for each email", async () => {
+    const { page, bodies } = await generateWith(browser);
+    assert(JSON.parse(bodies[1].raw).messages[0].content.includes('"opening_style": "'), "opening_style not sent to the writer");
+    assert(JSON.parse(bodies[1].raw).system[0].text.includes('Use the idea in "opening_style"'), "writing prompt does not use opening_style");
+    const out = await page.evaluate(async () => {
+      const { pickOpening, OPENINGS } = await import("/js/prompt.js");
+      const all = (input) => {
+        const seen = new Set();
+        for (let i = 0; i < 40; i++) seen.add(pickOpening(input, () => i / 40));
+        return [...seen];
+      };
+      return {
+        sizes: Object.fromEntries(Object.entries(OPENINGS).map(([k, v]) => [k, v.length])),
+        plain: all({ goal: "first_contact", has: [], clientNotes: "" }),
+        withHas: all({ goal: "first_contact", has: [{ en: "x" }], clientNotes: "" }),
+        withNotes: all({ goal: "first_contact", has: [], clientNotes: "new flat" }),
+        call: all({ goal: "follow_up", has: [{ en: "x" }], clientNotes: "note" }),
+        meeting: all({ goal: "offer", has: [], clientNotes: "" }),
+        top: pickOpening({ goal: "first_contact", has: [], clientNotes: "" }, () => 0.999999),
+      };
+    });
+    assert(out.plain.length === out.sizes.general && out.plain.length >= 3, "first contact should use every general opening: " + out.plain.length);
+    assert(out.plain.every((o) => !o.includes("existing insurances") && !o.includes("agent_notes_about_client") && !/call|meeting/.test(o)), "an opening that does not fit was picked");
+    assert(out.plain.some((o) => o.includes("one point I like to raise early")), "the 'raise early' opening is missing");
+    assert(out.withHas.length === out.sizes.general + out.sizes.has && out.withHas.some((o) => o.includes("existing insurances")), "existing insurances opening not offered");
+    assert(out.withNotes.some((o) => o.includes("agent_notes_about_client")), "notes opening not offered");
+    assert(out.call.length === out.sizes.call && out.call.every((o) => o.includes("call")), "follow-up must refer to the call");
+    assert(out.meeting.every((o) => o.includes("meeting")), "offer must refer to the meeting");
+    assert(typeof out.top === "string" && out.top.length > 10, "edge of the random range fails");
+  });
+
   await test("Promise check: warns on 'no questions asked' unless it is in My products", async () => {
     const write = writeResult({ email_body: "{{SALUTATION}}\n\n## Glass\n\nIt covers any kind of damage, no questions asked." });
     let r = await generateWith(browser, { api: defaultApi({ write }), offer: ["glass"], settings: { productFacts: { glass: { covers: "Glass breakage of windows and doors" } } } });
