@@ -321,6 +321,15 @@ async function waitEdit(page) {
     assert(!(await clean.page.textContent("#warnings")).includes("pressure wording"), "urgency warning shown without cause");
   });
 
+  await test("Religion and caste: a warning when the email mentions them", async () => {
+    const body = writeResult().email_body + "\n\nMany families settle this at the temple after Diwali, whatever their caste.";
+    const { page } = await generateWith(browser, { api: defaultApi({ write: writeResult({ email_body: body }) }) });
+    const warn = await page.textContent("#warnings");
+    assert(warn.includes("mentions religion or caste") && warn.includes('"temple"') && warn.includes('"Diwali"') && warn.includes('"caste"'), "no warning: " + warn);
+    const clean = await generateWith(browser);
+    assert(!(await clean.page.textContent("#warnings")).includes("mentions religion or caste"), "warning shown without cause");
+  });
+
   await test("Promise check: warns on 'no questions asked' unless it is in My products", async () => {
     const write = writeResult({ email_body: "{{SALUTATION}}\n\n## Glass\n\nIt covers any kind of damage, no questions asked." });
     let r = await generateWith(browser, { api: defaultApi({ write }), offer: ["glass"], settings: { productFacts: { glass: { covers: "Glass breakage of windows and doors" } } } });
@@ -363,7 +372,10 @@ async function waitEdit(page) {
     assert(msg.includes('"home_country": "India"') && msg.includes("Karnataka"), "country or region missing in research: " + msg);
     assert(!msg.includes("Software engineer") && !msg.includes('"age"') && !msg.includes("married"), "client details were sent to research: " + msg);
     const writing = JSON.parse(bodies[1].raw);
-    assert(writing.system[0].text.includes("The insurance itself, there and here"), "writing prompt has no comparison block");
+    const rules = writing.system[0].text;
+    assert(rules.includes("The example from the home country") && rules.includes("Never compare the two countries a second time"), "writing prompt does not use the home country as the example");
+    assert(!rules.includes("The insurance itself, there and here") && rules.includes("wish about the client's day") && rules.includes("Never mention or hint at religion, caste"), "old comparison block still there, or wish or religion rule missing");
+    assert(research.system[0].text.includes("Never give facts about religion, caste"), "research prompt has no religion rule");
     assert((writing.messages[0].content.match(/"about": "home_insurance"/g) || []).length === 2, "home_insurance notes not sent to the writer");
     const labels = await page.locator("#facts .fact-about").allTextContents();
     assert(labels.filter((l) => l === "This insurance in India").length === 2, "panel labels wrong: " + JSON.stringify(labels));

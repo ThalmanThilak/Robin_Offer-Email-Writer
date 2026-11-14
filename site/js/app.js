@@ -13,6 +13,7 @@ import {
   findRuleTalk,
   findPromises,
   findFakeUrgency,
+  findSensitive,
   signatureStartsWithClosing,
   stripTrailingClosing,
 } from "./checks.js";
@@ -451,7 +452,7 @@ function checkResult(raw, notes, input) {
   const checkedText = [result.email_body, result.whatsapp_message, ...result.subject_lines].join("\n");
   const products = input.offer.map((p, i) => ({ p, key: `P${i + 1}` }));
   const homeShort = products
-    .filter(({ key }) => used.filter((n) => n.product === key && n.about === "home").length < MIN_HOME_FACTS)
+    .filter(({ key }) => used.filter((n) => n.product === key && (n.about === "home" || n.about === "home_insurance")).length < MIN_HOME_FACTS)
     .map(({ p }) => productLabel(p));
   // The research found nothing about this insurance in the home country, so the comparison block is missing.
   const noInsurance = products.filter(({ key }) => !notes.some((n) => n.product === key && n.about === "home_insurance")).map(({ p }) => productLabel(p));
@@ -465,6 +466,7 @@ function checkResult(raw, notes, input) {
     ruleTalk: findRuleTalk(checkedText),
     promises: findPromises(checkedText, agentFactsText(input)),
     fakeUrgency: findFakeUrgency(checkedText, agentFactsText(input)),
+    sensitive: findSensitive(checkedText),
     homeShort,
     noInsurance,
     dashesFixed,
@@ -535,7 +537,7 @@ function renderFacts(notes) {
 function renderResult() {
   const last = state.last;
   if (!last) return;
-  const { result, badNumbers, informal, ruleTalk, promises, fakeUrgency, homeShort, noInsurance, dashesFixed, factsPanel } = last.checked;
+  const { result, badNumbers, informal, ruleTalk, promises, fakeUrgency, sensitive, homeShort, noInsurance, dashesFixed, factsPanel } = last.checked;
   $("result-empty").hidden = true;
   $("result").hidden = false;
 
@@ -575,6 +577,7 @@ function renderResult() {
   };
   if (homeShort.length) warn(t("warn_home_facts", { list: homeShort.join(", ") }));
   if (noInsurance.length) warn(t("warn_no_insurance", { list: noInsurance.join(", ") }));
+  if (sensitive.length) warn(t("warn_sensitive", { list: sensitive.map((p) => `"${p}"`).join(", ") }));
   if (fakeUrgency.length) warn(t("warn_urgency", { list: fakeUrgency.map((p) => `"${p}"`).join(", ") }));
   if (promises.length) warn(t("warn_promises", { list: promises.map((p) => `"${p}"`).join(", ") }));
   if (ruleTalk.length) warn(t("warn_rule_talk", { list: ruleTalk.map((p) => `"${p}"`).join(", ") }));

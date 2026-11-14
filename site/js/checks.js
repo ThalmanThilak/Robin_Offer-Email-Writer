@@ -140,6 +140,13 @@ export function findFakeUrgency(text, agentFactsText) {
   return FAKE_URGENCY.filter((p) => lower.includes(p) && !facts.includes(p));
 }
 
+// Religion and caste must never appear in an email.
+const SENSITIVE = /(?<![\p{L}])(religion|religious|religi\u00f6s\p{L}*|caste|kaste|hindu\p{L}*|muslim\p{L}*|moslem\p{L}*|islam\p{L}*|christian\p{L}*|christ(?:en|lich\p{L}*)|sikh\p{L}*|buddhis\p{L}*|jewish|j\u00fcdisch\p{L}*|brahmin\p{L}*|dalit\p{L}*|temple|tempel|mosque|moschee|church|kirche|diwali|ramadan|eid|christmas|weihnacht\p{L}*|easter|ostern)(?![\p{L}])/giu;
+
+export function findSensitive(text) {
+  return [...new Set([...(text || "").matchAll(SENSITIVE)].map((m) => m[0]))];
+}
+
 // ---------- Closing line ----------
 
 const CLOSING_LINE = /^(kind regards|best regards|warm regards|regards|best wishes|all the best|best|sincerely|yours sincerely|yours faithfully|yours truly|thanks|thank you|many thanks|cheers|mit freundlichen gr\u00fc(?:\u00df|ss)en|freundliche gr\u00fc(?:\u00df|ss)e|viele gr\u00fc(?:\u00df|ss)e|beste gr\u00fc(?:\u00df|ss)e|herzliche gr\u00fc(?:\u00df|ss)e|liebe gr\u00fc(?:\u00df|ss)e|sch\u00f6ne gr\u00fc(?:\u00df|ss)e|gru(?:\u00df|ss)|danke|vielen dank|mfg|lg|vg)\b[\s,.!]*$/i;

@@ -46,8 +46,10 @@ Every email tells a story close to the client's life and shows the difference be
 ## No prices and no numbers
 Emails never show prices, cover amounts or any other numbers, also when they are known. Robin adds them by hand after he copies the email. The tool marks every number that still appears and shows a warning. For this reason My products has no price field.
 
-## Insurance comparison
-The research also looks for the same kind of insurance in the client's home country: its local name, if the law requires it, how common it is. The email shows this in a short block with two bullet points, one for the home country and one for Germany. In "Facts to check" these facts have the label "This insurance in (country)".
+## How the email is built
+The email starts with a short wish about the client's day. Then it explains the insurance with one example from the client's home country, says how the same thing works in Germany, says what the insurance does, and offers a short call. It is plain running text with no labels, and the home country appears once. It never mentions religion or caste, and the tool warns Robin if it does.
+
+The research also looks for the same kind of insurance in the client's home country: its local name, if the law requires it, how common it is. These facts go into the home country example. In "Facts to check" these facts have the label "This insurance in (country)".
 
 ## Notes from the call or meeting
 Robin can type notes about the client in "Client details". The email uses them. The notes go to Claude without the client's name. They are not saved.

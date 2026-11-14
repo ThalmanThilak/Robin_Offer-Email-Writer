@@ -20,9 +20,9 @@ export const MAX_SEARCHES = 10;
 // Each extra product adds the "extra" number of words.
 // Robin never sees these numbers.
 export const LENGTH_WORDS = {
-  short: { base: 220, extraPerProduct: 130 },
-  medium: { base: 380, extraPerProduct: 220 },
-  long: { base: 540, extraPerProduct: 270 },
+  short: { base: 130, extraPerProduct: 90 },
+  medium: { base: 190, extraPerProduct: 130 },
+  long: { base: 280, extraPerProduct: 180 },
 };
 
 // Saved research. The facts for one country and one product are kept in the browser
